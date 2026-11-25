@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Flash Creator</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span></span><i></i></span>
+        <span><strong>Flash Creator</strong><small>AGENTE LOCAL</small></span>
+      </div>
+      <span class="local-badge"><i></i> Beta local</span>
+    </header>
+
+    <main>
+      <section class="intro">
+        <p class="eyebrow">01 / PREPARAR</p>
+        <h1>Arma tu cola.</h1>
+        <p class="muted">Los archivos se guardan en este equipo. La automatización de TikTok se habilitará después de validarla.</p>
+      </section>
+
+      <section class="notice" role="status">
+        <span class="notice-icon" aria-hidden="true">i</span>
+        <p><strong>Solo biblioteca y agenda en esta versión.</strong> No se ha iniciado sesión con TikTok ni se enviará ningún video.</p>
+      </section>
+
+      <section class="library section-card" aria-labelledby="library-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">BIBLIOTECA LOCAL</p><h2 id="library-title">Videos</h2></div>
+          <span class="counter" id="video-count">0</span>
+        </div>
+        <label class="dropzone" for="video-picker">
+          <span class="drop-icon" aria-hidden="true">+</span>
+          <strong>Selecciona videos</strong>
+          <small>MP4 o MOV · máximo 2 GiB · se quedan aquí</small>
+        </label>
+        <input id="video-picker" class="visually-hidden" type="file" accept=".mp4,.mov,video/mp4,video/quicktime" multiple />
+        <p class="helper" id="import-status" aria-live="polite">Todavía no hay archivos en la cola.</p>
+        <ol id="video-list" class="video-list" aria-label="Videos de la cola"></ol>
+      </section>
+
+      <section class="section-card schedule-card" aria-labelledby="schedule-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">02 / PLANIFICAR</p><h2 id="schedule-title">Ventana y ritmo</h2></div>
+          <span class="schedule-symbol" aria-hidden="true">◷</span>
+        </div>
+        <div class="form-grid">
+          <label>Primer video después de <span class="field-with-unit"><input id="start-delay" type="number" min="0" max="1440" value="20" /><small>min</small></span></label>
+          <label>Intervalo entre videos <span class="field-with-unit"><input id="interval" type="number" min="5" max="1440" value="35" /><small>min</small></span></label>
+          <label>Desde <input id="window-start" type="time" value="08:00" /></label>
+          <label>Hasta <input id="window-end" type="time" value="22:00" /></label>
+          <label>Tope diario <span class="field-with-unit"><input id="daily-cap" type="number" min="1" max="100" value="6" /><small>videos</small></span></label>
+          <label>Variación <span class="field-with-unit"><input id="jitter" type="number" min="0" max="30" step="5" value="5" /><small>min ±</small></span></label>
+        </div>
+        <fieldset class="days-field">
+          <legend>Días activos</legend>
+          <div class="day-picker">
+            <label><input type="checkbox" value="1" checked /><span>L</span></label>
+            <label><input type="checkbox" value="2" checked /><span>M</span></label>
+            <label><input type="checkbox" value="3" checked /><span>X</span></label>
+            <label><input type="checkbox" value="4" checked /><span>J</span></label>
+            <label><input type="checkbox" value="5" checked /><span>V</span></label>
+            <label><input type="checkbox" value="6" checked /><span>S</span></label>
+            <label><input type="checkbox" value="0" checked /><span>D</span></label>
+          </div>
+        </fieldset>
+        <label class="horizon-field">Horizonte que permite tu cuenta (días)<input id="horizon" type="number" min="1" max="365" value="10" /></label>
+        <p class="helper warning">El límite puede variar por cuenta. Aquí se usa el valor que indiques; todavía no se detecta automáticamente en TikTok Studio.</p>
+        <button class="button-primary" id="plan-button" type="button">Calcular vista previa</button>
+        <div id="schedule-errors" class="schedule-errors" role="alert" hidden></div>
+        <ol id="schedule-list" class="schedule-list" aria-label="Vista previa de horarios"></ol>
+      </section>
+
+      <section class="footer-note">
+        <span class="footer-lock" aria-hidden="true">◇</span>
+        <p><strong>Almacenamiento en este navegador.</strong><br />Puedes quitar cualquier video de la cola cuando quieras.</p>
+      </section>
+    </main>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>
