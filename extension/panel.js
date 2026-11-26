@@ -1,6 +1,6 @@
 import { addVideos, listVideoMetadata, removeVideo } from "./core/local-media-store.mjs";
 import { DEFAULT_SCHEDULE, formatSlotForDisplay, planSchedule } from "./core/scheduler.mjs";
-import { readQueue, writeQueue } from "./core/queue-store.mjs";
+import { queueIsEditable, queueItemStatusLabel, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
 
 const elements = {
   picker: document.querySelector("#video-picker"),
@@ -15,6 +15,7 @@ const elements = {
 let queue;
 let videos = [];
 let configSaveTimer = null;
+let isImporting = false;
 
 const sizeLabel = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -40,7 +41,9 @@ function createButton(label, title, onClick, disabled = false, extraClass = "") 
 }
 
 function renderVideos() {
+  const canEditQueue = queueIsEditable(queue);
   const byId = new Map(videos.map((video) => [video.id, video]));
+  const queueItems = new Map((queue.items ?? []).map((item) => [item.videoId, item]));
   const ordered = (queue.videoIds ?? []).map((id) => byId.get(id)).filter(Boolean);
   elements.count.textContent = String(ordered.length);
   elements.videoList.replaceChildren();
@@ -61,20 +64,27 @@ function renderVideos() {
     const size = document.createElement("span");
     size.className = "video-size";
     size.textContent = `${sizeLabel(video.size)} · ${new Date(video.lastModified).toLocaleDateString("es")}`;
-    content.append(name, size);
+    const queueItem = queueItems.get(video.id);
+    const state = document.createElement("span");
+    state.className = "video-state";
+    state.textContent = queueItemStatusLabel(queueItem?.status);
+    if (queueItem?.lastResult?.message) state.title = queueItem.lastResult.message;
+    content.append(name, size, state);
 
     const actions = document.createElement("span");
     actions.className = "video-actions";
     actions.append(
-      createButton("↑", "Mover video hacia arriba", () => moveVideo(index, -1), index === 0),
-      createButton("↓", "Mover video hacia abajo", () => moveVideo(index, 1), index === ordered.length - 1),
-      createButton("×", "Quitar video y borrarlo del almacenamiento local", () => deleteVideo(video.id), false, "remove"),
+      createButton("↑", "Mover video hacia arriba", () => moveVideo(index, -1), !canEditQueue || index === 0),
+      createButton("↓", "Mover video hacia abajo", () => moveVideo(index, 1), !canEditQueue || index === ordered.length - 1),
+      createButton("×", "Quitar video y borrarlo del almacenamiento local", () => deleteVideo(video.id), !canEditQueue, "remove"),
     );
     row.append(number, content, actions);
     elements.videoList.append(row);
   });
 
-  elements.planButton.disabled = ordered.length === 0;
+  elements.picker.disabled = isImporting || !canEditQueue;
+  document.querySelectorAll(".schedule-card input").forEach((input) => { input.disabled = !canEditQueue; });
+  elements.planButton.disabled = ordered.length === 0 || !canEditQueue;
   if (ordered.length === 0) {
     elements.importStatus.textContent = "Todavía no hay archivos en la cola.";
   } else {
@@ -145,7 +155,7 @@ function restoreConfig(config = DEFAULT_SCHEDULE) {
 }
 
 function handleScheduleChange() {
-  if (!queue) return;
+  if (!queue || !queueIsEditable(queue)) return;
   queue = { ...queue, config: readScheduleConfig(), slots: [], preflight: null };
   renderSchedule();
   clearTimeout(configSaveTimer);
@@ -159,19 +169,21 @@ async function persistQueue() {
 }
 
 async function moveVideo(index, offset) {
+  if (!queueIsEditable(queue)) return;
   const target = index + offset;
   if (target < 0 || target >= queue.videoIds.length) return;
   const videoIds = [...queue.videoIds];
   [videoIds[index], videoIds[target]] = [videoIds[target], videoIds[index]];
-  queue = { ...queue, videoIds, slots: [], preflight: null };
+  queue = reconcileQueueVideoIds(queue, videoIds);
   await persistQueue();
   renderVideos();
 }
 
 async function deleteVideo(id) {
+  if (!queueIsEditable(queue)) return;
   try {
     await removeVideo(id);
-    queue = { ...queue, videoIds: queue.videoIds.filter((videoId) => videoId !== id), slots: [], preflight: null };
+    queue = reconcileQueueVideoIds(queue, queue.videoIds.filter((videoId) => videoId !== id));
     videos = videos.filter((video) => video.id !== id);
     await persistQueue();
     renderVideos();
@@ -181,14 +193,16 @@ async function deleteVideo(id) {
 }
 
 async function handleImport() {
+  if (!queue || !queueIsEditable(queue) || isImporting) return;
   const files = [...(elements.picker.files ?? [])];
   if (!files.length) return;
   elements.importStatus.textContent = "Guardando archivos directamente en el almacenamiento local…";
+  isImporting = true;
   elements.picker.disabled = true;
   try {
     const result = await addVideos(files);
     videos = [...videos, ...result.added];
-    queue = { ...queue, videoIds: [...queue.videoIds, ...result.added.map((video) => video.id)], slots: [], preflight: null };
+    queue = reconcileQueueVideoIds(queue, [...queue.videoIds, ...result.added.map((video) => video.id)]);
     await persistQueue();
     const rejectedMessage = result.rejected.length
       ? ` No se agregaron: ${result.rejected.map((file) => `${file.name}: ${file.reason}`).join(" ")}`
@@ -200,12 +214,14 @@ async function handleImport() {
   } catch (error) {
     elements.importStatus.textContent = error.message || "No se pudieron guardar los archivos localmente.";
   } finally {
-    elements.picker.disabled = false;
+    isImporting = false;
+    elements.picker.disabled = !queueIsEditable(queue);
     elements.picker.value = "";
   }
 }
 
 async function handlePlan() {
+  if (!queue || !queueIsEditable(queue)) return;
   elements.scheduleErrors.hidden = true;
   const config = readScheduleConfig();
   const result = planSchedule(queue.videoIds.length, config, { now: new Date() });
@@ -232,13 +248,8 @@ async function initialize() {
     const recoveredVideos = videos.filter((video) => !retainedSet.has(video.id));
     const nextIds = [...retainedIds, ...recoveredVideos.map((video) => video.id)];
     const queueChanged = nextIds.length !== queue.videoIds.length || nextIds.some((id, index) => id !== queue.videoIds[index]);
-    queue = {
-      ...queue,
-      videoIds: nextIds,
-      slots: queueChanged ? [] : queue.slots,
-      preflight: queueChanged ? null : queue.preflight,
-      timeZone: queue.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "local",
-    };
+    queue = queueChanged ? reconcileQueueVideoIds(queue, nextIds) : queue;
+    queue = { ...queue, timeZone: queue.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "local" };
     restoreConfig(queue.config ?? DEFAULT_SCHEDULE);
     await persistQueue();
     renderVideos();

@@ -25,7 +25,7 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 - Si el último horario excede el límite conocido o detectado, el inicio queda bloqueado antes de subir el primer video y se ofrecen recalcular la cola o cancelar.
 - La vista previa muestra los videos, captions, productos, etiquetas, fecha/hora y zona horaria, junto con advertencias de posibles duplicados.
 
-## 4. Cola recuperable, reintentos seguros e historial local — Pendiente
+## 4. Cola recuperable, reintentos seguros e historial local — En progreso
 
 - Se persisten localmente el ID de cola, índice, estado por video, número de intento, horario asignado, zona horaria, configuración y último resultado; los cambios relevantes se guardan antes y después de cada acción externa.
 - Al reiniciar el navegador o service worker, se recupera la cola en el índice y horario guardados.
