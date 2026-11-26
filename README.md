@@ -9,6 +9,10 @@ Flash Creator es el producto nuevo. **Auto Poster** es únicamente la extensión
 - La extensión no pide permisos de `cookies`, `tabs` ni `scripting`, y no tiene hosts TikTok autorizados todavía. Aún no inicia sesión, sube ni programa publicaciones.
 - Los archivos no se envían al servidor. La integración de acceso, base comercial y webhooks de Hotmart se implementará en una fase posterior con secretos solo en el servidor.
 
+## Alcance de TikTok
+
+La extensión no inspecciona ni automatiza TikTok Studio. La revisión de términos oficiales y alternativas aprobadas está en [la evaluación de compatibilidad con TikTok](docs/tiktok-studio-compatibility-review.md). El ensayo actual valida únicamente datos locales; cualquier integración futura queda condicionada a autorización escrita de TikTok o a una vía oficial aprobada.
+
 ## Requisitos y comandos
 
 Se requiere Node.js `>=22.13.0` y pnpm `11.25.0`.

@@ -35,15 +35,16 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 - No se hace reintento automático después de pulsar “Programar” cuando TikTok no confirmó el resultado.
 - El historial local avisa de posibles duplicados usando nombre, tamaño y fecha de modificación; el usuario decide si omite, revisa o programa de nuevo.
 
-## 5. Agente de TikTok Studio y permisos mínimos — Pendiente
+## 5. Compatibilidad con TikTok y permisos mínimos — Bloqueada para automatización hasta autorización
 
-- El agente solo modifica TikTok Studio mediante un adaptador reemplazable; detecta si la sesión está iniciada usando marcadores visibles de TikTok y solicita al usuario iniciar sesión cuando corresponda.
-- Antes de la confirmación final, compara la fecha/hora mostradas con el slot solicitado y confirma que la acción sea “Programar”; nunca acciona “Publicar ahora” para una solicitud futura.
-- Existe un modo de prueba que rellena y revisa el formulario sin pulsar “Programar”.
-- Se elimina el permiso `cookies` si la comprobación de sesión no lo necesita.
-- Se comprueba si `tabs` puede retirarse o limitarse y cada permiso que permanezca tiene justificación funcional y pruebas reales de Chrome.
-- Los hosts permitidos se limitan a las páginas de TikTok estrictamente necesarias; no se incorpora el antiguo host de licencias `sslip.io`.
-- El panel lateral acompaña a TikTok Studio y sus controles se coordinan con el service worker para que cerrar el panel no descarte el estado local.
+- La extensión no inyecta scripts, no lee ni modifica el DOM de TikTok, no detecta automáticamente sesión o campos, no sube videos ni activa controles de TikTok mientras no exista autorización escrita de TikTok o una integración oficial aprobada aplicable. La decisión y las fuentes están en `docs/tiktok-studio-compatibility-review.md`.
+- El modo ensayo actual solo valida datos locales de cola y agenda; no consulta ni interactúa con una pestaña de TikTok. El usuario puede revisar manualmente su cuenta e interfaz sin compartir credenciales.
+- Si se confirma una vía autorizada, el adaptador será reemplazable y usará únicamente los permisos/hosts aprobados estrictamente necesarios, con validación de cuenta y formulario antes de cualquier acción.
+- Aun con autorización futura, un modo de prueba separado deberá permitir revisar el formulario sin subir ni pulsar “Programar”; la programación real requerirá criterios de aceptación y consentimiento explícitos en otra fase.
+- Se mantiene la prohibición de añadir `cookies`, `tabs`, `scripting` o hosts TikTok por anticipado; cada permiso que se proponga deberá tener justificación y pruebas de Chrome.
+- No se incorpora el antiguo host de licencias `sslip.io`.
+- El panel lateral conserva el estado local al cerrarse y reabrirse, sin depender de leer datos de TikTok.
+- La Content Posting API se evalúa separadamente: confirmar requisitos de aplicación, aprobación, scopes, auditoría, UX y si la programación futura está soportada antes de elegirla.
 
 ## 6. Transferencia de archivos grandes — Pendiente
 

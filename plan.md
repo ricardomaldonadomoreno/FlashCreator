@@ -12,10 +12,10 @@ Construir Flash Creator como una plataforma web con una extensión/agente local 
 ## Arquitectura y alcance
 
 - **Web en Vercel:** Next.js App Router para el sitio, panel de cuenta y futuras páginas. Los Route Handlers alojarán endpoints server-side como webhooks. Ningún secreto privado ni clave de proveedor se incluirá en el JavaScript público.
-- **Agente de Chrome Manifest V3:** extensión con Side Panel, service worker y scripts limitados a TikTok Studio. La interfaz de configuración quedará junto a la pestaña de TikTok Studio; no se intentará incrustar TikTok en un iframe de la web.
+- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. No se inyectarán scripts ni se leerá o controlará TikTok Studio hasta confirmar una autorización escrita o una vía oficial aprobada que lo permita. La interfaz de configuración local seguirá separada de la página de TikTok; no se intentará incrustar TikTok en un iframe de la web.
 - **Datos locales:** IndexedDB guarda blobs y metadatos en object stores separados; `chrome.storage.local` guarda preferencias pequeñas y estado recuperable. Los videos, captions completos y cookies no se envían al backend en el flujo normal.
 - **Backend comercial:** rutas server-side y una base pequeña para identidad verificada, licencia, instalaciones autorizadas, suscripciones y eventos de pago. Se propone Supabase Auth/Postgres para el primer lanzamiento por su integración sencilla con Vercel; no se habilitará acceso real hasta configurar credenciales y políticas. Hotmart será el primer adaptador de pago y se mantendrá una interfaz para agregar otras pasarelas.
-- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. El agente no afirmará que ya sube ni programa videos hasta implementar y probar el adaptador de TikTok.
+- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. El agente no afirmará que ya sube ni programa videos; la integración queda condicionada a autorización escrita o una vía oficial aprobada.
 - **Entrega de la extensión:** desarrollo primero como extensión desempaquetada en Chrome; antes de venderla se preparará el paquete y el flujo de distribución de Chrome Web Store.
 
 ## Estructura prevista
@@ -52,8 +52,8 @@ scripts/                 Comandos de desarrollo y empaquetado de la extensión
 - Configurar intervalo, ventana horaria permitida, días activos, tope por día y variación aleatoria pequeña.
 - Calcular y persistir de antemano los slots de toda la cola, con zona horaria explícita; reanudar sin cambiar horarios automáticamente.
 - Validar antes de comenzar que todos los slots respetan ventana, tope y horizonte que permita TikTok Studio para la cuenta. No asumir que un límite visible en una cuenta es universal.
-- Antes de confirmar, comprobar que el formulario contiene la fecha y hora solicitadas y que la acción final dice “Programar”; nunca pulsar “Publicar ahora” en una solicitud de futuro.
-- Eliminar `cookies` si no hace falta. Probar si `tabs` se puede eliminar o limitar; conservar únicamente los permisos Chrome y hosts que se prueben necesarios. El estado de login se comprobará con marcadores visibles en TikTok Studio.
+- Solo si existe autorización escrita o integración oficial aprobada, evaluar cualquier comprobación automatizada del formulario, de la fecha/hora o de la acción final. Sin esa aprobación, el ensayo se limita a validar los datos locales y no leerá ni modificará la página de TikTok.
+- Mantener `cookies`, `tabs`, `scripting` y hosts TikTok fuera del manifiesto hasta que exista autorización. Mientras tanto, el usuario revisará manualmente su propia sesión; Flash Creator no inferirá su estado de login.
 - El resolvedor de enlaces acepta solo HTTPS/HTTP en hostnames de TikTok incluidos en allowlist, valida cada salto de redirección y rechaza protocolos, dominios y hosts falsificados.
 
 ### Producto, acceso y evolución
@@ -64,7 +64,7 @@ scripts/                 Comandos de desarrollo y empaquetado de la extensión
 - Vincular compra con cuenta mediante correo verificado o código temporal; nunca activar por un email escrito sin verificación. La extensión usará tokens de acceso de vida limitada y no contendrá secretos maestros.
 - Persistir solo datos necesarios para cuentas, acceso, instalaciones y recibos de webhooks. No persistir videos ni enviar archivos al backend.
 - Añadir después conectores de IA que permitan elegir proveedor/API, con claves guardadas del lado servidor cuando sea posible. Las claves personales utilizadas directamente por el usuario se gestionarán con consentimiento, almacenamiento seguro y límites claros.
-- La Content Posting API oficial de TikTok se evaluará por separado. No se asumirá que sustituye TikTok Studio ni que admite programación futura hasta verificar aprobación, scopes y UX requerida.
+- La Content Posting API oficial de TikTok se evaluará por separado. Requiere aprobación del producto y scope aplicable, autorización del creador y cumplimiento de sus lineamientos de UX/auditoría. No se asumirá que sustituye TikTok Studio ni que admite programación futura hasta verificarlo en documentación oficial vigente y aprobación de TikTok.
 
 ## Decisiones de diseño
 
@@ -86,7 +86,7 @@ Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave*
 
 1. **Base del producto:** estructura Next.js y agente lateral, paleta, importación local, metadatos/blobs separados y agenda preliminar.
 2. **Núcleo robusto:** persistencia de cola e índice, historial, reintentos seguros, transferencia binaria, reordenamiento y cálculo completo de horarios.
-3. **Adaptador TikTok Studio:** conservar el flujo de la referencia, detectar cambios de pantalla, login, prueba sin publicar, confirmación rigurosa de hora y acción final.
+3. **Compatibilidad con TikTok (condicionada):** primero confirmar autorización escrita o una vía oficial aprobada. Hasta entonces, modo de ensayo local sin hosts, lectura del DOM, detección automatizada de sesión, carga ni clics en TikTok. Evaluar Content Posting API como vía separada, sin prometer programación futura.
 4. **Cuenta y pagos:** login verificado, política de acceso, esquema de base, token temporal de extensión, webhook Hotmart idempotente y adaptador de pagos.
 5. **Beta y distribución:** validación con cuentas de prueba, reinicios, red irregular, cuotas locales, zonas horarias y límites; preparar privacidad, soporte y distribución Web Store.
 6. **Evolución:** localización, formatos nuevos como `.webm` solo tras comprobar compatibilidad, integraciones de IA configurables y otros proveedores de pago.
@@ -96,7 +96,8 @@ Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave*
 - Cambios en TikTok Studio pueden invalidar selectores; el adaptador debe ser reemplazable y fallar con explicación, no hacer clic a ciegas.
 - Una confirmación perdida después de enviar es un riesgo de duplicación; el resultado debe quedar “por verificar”.
 - La PC y Chrome deben seguir activos mientras el agente carga y programa. Cuando TikTok confirme que cada publicación futura quedó programada en sus servidores, apagar la PC no debe cancelar esas publicaciones ya aceptadas.
-- La automatización depende de la UI autorizada al usuario y puede cambiar por cuenta, país o versión. No prometer compatibilidad universal sin pruebas.
+- Los términos globales de TikTok restringen el uso de scripts automatizados para recopilar información o interactuar con sus servicios y condicionan ciertos usos comerciales; el adaptador de UI queda bloqueado hasta revisar autorización escrita o confirmar una vía aprobada. Ver `docs/tiktok-studio-compatibility-review.md`.
+- La disponibilidad de funciones de TikTok Studio puede variar por cuenta, país o versión. No prometer compatibilidad universal sin pruebas autorizadas.
 - El control de licencia protege el servicio, pero no vuelve imposible inspeccionar/modificar una extensión ejecutada localmente; la autoridad de acceso y secretos permanecen server-side.
 
 ## Referencias técnicas consultadas
