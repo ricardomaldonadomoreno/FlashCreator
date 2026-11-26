@@ -41,3 +41,24 @@ export function transferChunkCount(totalBytes, chunkSize = TRANSFER_CHUNK_SIZE_B
   if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) throw new RangeError("El tamaño del fragmento no es válido.");
   return Math.ceil(totalBytes / chunkSize);
 }
+
+export const TRANSFER_AUTH_TTL_MS = 60_000;
+
+export function transferAuthorizationKey(transferId) {
+  if (typeof transferId !== "string" || !/^[\w-]{1,128}$/.test(transferId)) {
+    throw new TypeError("El identificador de transferencia no es válido.");
+  }
+  return `flashCreatorTransferAuth:${transferId}`;
+}
+
+export function isValidTransferAuthorization(authorization, request, now = Date.now()) {
+  if (!authorization || typeof authorization !== "object" || !request || typeof request !== "object") return false;
+  if (authorization.transferId !== request.transferId || authorization.videoId !== request.videoId) return false;
+  if (typeof request.authorizationToken !== "string"
+    || request.authorizationToken.length < 32
+    || authorization.authorizationToken !== request.authorizationToken) return false;
+  if (!Number.isSafeInteger(authorization.expiresAt)
+    || authorization.expiresAt <= now
+    || authorization.expiresAt > now + TRANSFER_AUTH_TTL_MS) return false;
+  return transferMetadataMatches(authorization.expected, request.expected, request.expected?.size);
+}

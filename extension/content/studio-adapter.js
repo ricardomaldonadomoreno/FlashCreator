@@ -111,6 +111,7 @@
             transferId: request.transferId,
             videoId: request.videoId,
             expected: request.expected,
+            authorizationToken: request.authorizationToken,
           }, targetOrigin, [channel.port2]);
         } catch (error) {
           fail(new Error(error?.message || "No se pudo abrir el canal privado de transferencia."));
@@ -279,6 +280,7 @@
     }
     if (typeof request.transferId !== "string" || !request.transferId
       || typeof request.videoId !== "string" || request.videoId !== request.expected?.id
+      || typeof request.authorizationToken !== "string" || request.authorizationToken.length < 32
       || !validDescriptor(request.expected)) {
       sendResponse({ ok: false, message: "La solicitud del video no es válida." });
       return;

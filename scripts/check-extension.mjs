@@ -20,8 +20,13 @@ const bridge = await readFile(new URL("../extension/transfer/bridge.js", import.
 const resources = manifest.web_accessible_resources ?? [];
 if (resources.length !== 1
   || JSON.stringify(resources[0].resources) !== JSON.stringify(["transfer/bridge.html", "transfer/bridge.js"])
-  || JSON.stringify(resources[0].matches) !== JSON.stringify(["https://www.tiktok.com/tiktokstudio/upload*"])) {
-  throw new Error("El puente solo puede exponerse en la ruta de carga de TikTok Studio.");
+  || JSON.stringify(resources[0].matches) !== JSON.stringify(["https://www.tiktok.com/*"])) {
+  throw new Error("El puente debe usar el patrón de origen válido de TikTok, sin abrir hosts externos.");
+}
+if (!bridge.includes("chrome.storage.session.get")
+  || !bridge.includes("isValidTransferAuthorization")
+  || !bridge.includes("chrome.storage.session.remove")) {
+  throw new Error("El puente debe consumir una autorización efímera antes de leer el video local.");
 }
 if (!adapter.includes('attachShadow({ mode: "closed" })')
   || !adapter.includes("new MessageChannel()")

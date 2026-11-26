@@ -4,6 +4,8 @@ import {
   isValidTransferDescriptor,
   transferChunkCount,
   transferMetadataMatches,
+  isValidTransferAuthorization,
+  transferAuthorizationKey,
   TRANSFER_CHUNK_SIZE_BYTES,
   TRANSFER_TIMEOUT_MS,
 } from "../core/transfer-protocol.mjs";
@@ -64,6 +66,14 @@ async function runTransfer(port, request) {
   if (!isValidTransferDescriptor(expected) || expected.id !== videoId) {
     throw new Error("Los datos del video no son válidos para iniciar la transferencia.");
   }
+
+  const authorizationKey = transferAuthorizationKey(transferId);
+  const storedAuthorization = await chrome.storage.session.get(authorizationKey);
+  const authorization = storedAuthorization[authorizationKey];
+  if (!isValidTransferAuthorization(authorization, request)) {
+    throw new Error("El puente no recibió una autorización local vigente del panel.");
+  }
+  await chrome.storage.session.remove(authorizationKey);
 
   const record = await getVideoForTransfer(videoId);
   if (!record?.metadata || !record.blob) throw new Error("El video ya no está disponible en el almacenamiento local.");

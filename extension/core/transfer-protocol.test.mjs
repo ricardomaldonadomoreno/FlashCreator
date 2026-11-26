@@ -5,6 +5,8 @@ import {
   isValidTransferDescriptor,
   transferChunkCount,
   transferMetadataMatches,
+  isValidTransferAuthorization,
+  TRANSFER_AUTH_TTL_MS,
   TRANSFER_CHUNK_SIZE_BYTES,
 } from "./transfer-protocol.mjs";
 
@@ -43,4 +45,27 @@ test("rejects invalid chunk ranges rather than retrying or skipping data", () =>
   assert.throws(() => getTransferChunkRange(1, 100), RangeError);
   assert.throws(() => getTransferChunkRange(0, 0), RangeError);
   assert.throws(() => transferChunkCount(0), RangeError);
+});
+
+test("accepts only a matching, unexpired one-time transfer authorization", () => {
+  const now = 10_000;
+  const request = {
+    transferId: "transfer-1",
+    videoId: descriptor.id,
+    authorizationToken: "a".repeat(36),
+    expected: { ...descriptor },
+  };
+  const authorization = {
+    transferId: request.transferId,
+    videoId: request.videoId,
+    authorizationToken: request.authorizationToken,
+    expected: { ...descriptor },
+    expiresAt: now + TRANSFER_AUTH_TTL_MS,
+  };
+
+  assert.equal(isValidTransferAuthorization(authorization, request, now), true);
+  assert.equal(isValidTransferAuthorization(authorization, { ...request, authorizationToken: "b".repeat(36) }, now), false);
+  assert.equal(isValidTransferAuthorization(authorization, { ...request, videoId: "other-video" }, now), false);
+  assert.equal(isValidTransferAuthorization({ ...authorization, expiresAt: now }, request, now), false);
+  assert.equal(isValidTransferAuthorization({ ...authorization, expected: { ...descriptor, name: "other.mp4" } }, request, now), false);
 });

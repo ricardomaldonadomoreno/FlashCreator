@@ -40,7 +40,7 @@ La versión actual está en fase local de desarrollo. No redistribuir como versi
 
 ## Privacidad de archivos
 
-El agente usa IndexedDB local para guardar blobs y metadatos en stores separados. El flujo web y el backend no reciben los videos. La transferencia de prueba pasa fragmentos Blob por un MessageChannel privado y los conserva en la pestaña para preparar el control de archivo; el comportamiento de carga de TikTok y la presión de memoria con clips grandes aún deben validarse en Chrome con videos no críticos. Si se corta el canal, el estado queda fallido o por verificar y no se reenvía automáticamente. No se deben añadir archivos `.crx`, perfiles de navegador, llaves privadas, tokens ni `.env` al repositorio. `.env.example` contiene nombres de variables sin valores secretos.
+El agente usa IndexedDB local para guardar blobs y metadatos en stores separados. El flujo web y el backend no reciben los videos. Chrome limita `web_accessible_resources.matches` al origen y requiere `/*`, por lo que el iframe del puente se declara para `https://www.tiktok.com/*`; el adaptador solo acepta la ruta exacta de carga y el puente requiere una autorización aleatoria de un solo uso antes de leer el blob. La transferencia de prueba pasa fragmentos Blob por un MessageChannel privado y los conserva en la pestaña para preparar el control de archivo; el comportamiento de carga de TikTok y la presión de memoria con clips grandes aún deben validarse en Chrome con videos no críticos. Si se corta el canal, el estado queda fallido o por verificar y no se reenvía automáticamente. No se deben añadir archivos `.crx`, perfiles de navegador, llaves privadas, tokens ni `.env` al repositorio. `.env.example` contiene nombres de variables sin valores secretos.
 
 ## Despliegue
 

@@ -2,6 +2,7 @@ import { addVideos, findPossibleDuplicateFiles, listVideoMetadata, removeVideo }
 import { DEFAULT_SCHEDULE, formatSlotForDisplay, planSchedule } from "./core/scheduler.mjs";
 import { isSupportedStudioUploadUrl, TIKTOK_STUDIO_UPLOAD_URL } from "./core/studio-target.mjs";
 import { MAX_PRE_SUBMIT_RETRIES, queueIsEditable, queueItemStatusLabel, QUEUE_ITEM_STATUSES, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
+import { TRANSFER_AUTH_TTL_MS, transferAuthorizationKey } from "./core/transfer-protocol.mjs";
 
 const elements = {
   picker: document.querySelector("#video-picker"),
@@ -548,18 +549,31 @@ async function transferVideoToStudio(video) {
   renderVideos();
   setStudioStatus(`Preparando “${video.name}” desde IndexedDB local…`, "info");
 
+  const expected = {
+    id: video.id,
+    name: video.name,
+    size: video.size,
+    lastModified: video.lastModified,
+    type: video.type,
+  };
+  const authorizationToken = crypto.randomUUID();
+  const authorizationKey = transferAuthorizationKey(transfer.transferId);
   try {
+    await chrome.storage.session.set({
+      [authorizationKey]: {
+        transferId: transfer.transferId,
+        videoId: video.id,
+        authorizationToken,
+        expected,
+        expiresAt: Date.now() + TRANSFER_AUTH_TTL_MS,
+      },
+    });
     const response = await chrome.tabs.sendMessage(connectedTabId, {
       type: "FLASH_CREATOR_STUDIO_TRANSFER_VIDEO",
       transferId: transfer.transferId,
       videoId: video.id,
-      expected: {
-        id: video.id,
-        name: video.name,
-        size: video.size,
-        lastModified: video.lastModified,
-        type: video.type,
-      },
+      expected,
+      authorizationToken,
     });
     if (!response?.ok) throw new Error(response?.message || "TikTok Studio no confirmó la preparación del archivo.");
     setStudioStatus(response.message || "El archivo quedó en TikTok Studio para revisión manual.", "success");
@@ -567,6 +581,7 @@ async function transferVideoToStudio(video) {
     await markTransferFailureLocally(transfer, error);
     setStudioStatus(error.message || "La transferencia se detuvo; revisa TikTok Studio.", "error");
   } finally {
+    await chrome.storage.session.remove(authorizationKey).catch(() => {});
     if (activeTransfer?.transferId === transfer.transferId) activeTransfer = null;
     renderVideos();
   }
