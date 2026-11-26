@@ -93,26 +93,40 @@ function renderVideos() {
       && queueItem.lastResult?.retryable === true
       && queueItem.attemptCount <= MAX_PRE_SUBMIT_RETRIES;
     const canStartTransfer = queueItem?.status === QUEUE_ITEM_STATUSES.PENDING || canRetryBeforeSubmit;
-    if (activeForVideo || canStartTransfer) {
-      const transferButton = document.createElement("button");
-      transferButton.type = "button";
-      transferButton.className = "video-transfer";
-      if (activeForVideo) {
-        transferButton.textContent = activeTransfer.stage === "awaiting_review"
-          ? "Archivo en Studio · revisar allí"
-          : "Cancelar transferencia";
-        transferButton.disabled = activeTransfer.stage === "awaiting_review" || activeTransfer.confirmedBeforeSet;
-        transferButton.addEventListener("click", cancelStudioTransfer);
-      } else {
-        transferButton.textContent = "Enviar video a TikTok Studio";
-        transferButton.disabled = !canEditQueue || !connectedTabId || Boolean(activeTransfer);
-        transferButton.title = connectedTabId
-          ? "Transferir solo este video; TikTok podría iniciar la carga al recibirlo."
-          : "Primero conecta la pestaña activa de TikTok Studio.";
-        transferButton.addEventListener("click", () => transferVideoToStudio(video));
-      }
-      row.append(transferButton);
+    const statusNeedsManualReview = [
+      QUEUE_ITEM_STATUSES.PREPARING,
+      QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION,
+      QUEUE_ITEM_STATUSES.SCHEDULED,
+      QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION,
+    ].includes(queueItem?.status)
+      || (queueItem?.status === QUEUE_ITEM_STATUSES.FAILED && !canRetryBeforeSubmit);
+    const transferButton = document.createElement("button");
+    transferButton.type = "button";
+    transferButton.className = `video-transfer${statusNeedsManualReview ? " review-needed" : ""}`;
+    if (activeForVideo) {
+      transferButton.textContent = activeTransfer.stage === "awaiting_review"
+        ? "Archivo en Studio · revisar allí"
+        : "Cancelar transferencia";
+      transferButton.disabled = activeTransfer.stage === "awaiting_review" || activeTransfer.confirmedBeforeSet;
+      transferButton.addEventListener("click", cancelStudioTransfer);
+    } else if (statusNeedsManualReview) {
+      transferButton.textContent = "Revisar Studio y habilitar prueba";
+      transferButton.disabled = Boolean(activeTransfer);
+      transferButton.title = "Primero confirma que TikTok Studio no esté cargando ni tenga este video programado.";
+      transferButton.addEventListener("click", () => resetVideoForManualRetest(video));
+    } else {
+      transferButton.textContent = connectedTabId ? "Enviar este video a TikTok Studio" : "Conectar Studio para probar";
+      transferButton.disabled = !canStartTransfer || !canEditQueue || !connectedTabId || Boolean(activeTransfer);
+      transferButton.title = !connectedTabId
+        ? "Abre la ruta de carga de TikTok Studio y pulsa Comprobar pestaña activa."
+        : !canEditQueue
+        ? "Revisa y resuelve los estados pendientes de la cola antes de transferir."
+        : canStartTransfer
+        ? "Enviar solo este video; TikTok Studio podría iniciar la carga al recibirlo."
+        : "Este video no está disponible para un nuevo intento automático.";
+      transferButton.addEventListener("click", () => transferVideoToStudio(video));
     }
+    row.append(transferButton);
     elements.videoList.append(row);
   });
 
@@ -352,6 +366,56 @@ function updateQueueItem(videoId, changes) {
       ? { ...item, ...changes, updatedAt }
       : item),
   };
+}
+
+async function resetVideoForManualRetest(video) {
+  if (activeTransfer) return;
+  const current = queue.items.find((item) => item.videoId === video.id);
+  const canResolveManually = [
+    QUEUE_ITEM_STATUSES.PREPARING,
+    QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION,
+    QUEUE_ITEM_STATUSES.SCHEDULED,
+    QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION,
+    QUEUE_ITEM_STATUSES.FAILED,
+  ].includes(current?.status);
+  if (!canResolveManually) return;
+
+  const confirmed = window.confirm(
+    `Antes de habilitar otra prueba para “${video.name}”, revisa TikTok Studio.\n\n` +
+    "Confirma que el video no está cargándose y que no quedó programado. Si no puedes verificarlo, cancela para evitar una carga duplicada.",
+  );
+  if (!confirmed) return;
+
+  const previousQueue = queue;
+  const reviewedAt = new Date().toISOString();
+  queue = {
+    ...queue,
+    status: "idle",
+    index: Math.max(0, queue.videoIds.indexOf(video.id)),
+    currentVideoId: video.id,
+    slots: [],
+    preflight: null,
+    history: [...(queue.history ?? []), {
+      action: "manual-review-reset",
+      videoId: video.id,
+      previousStatus: current.status,
+      at: reviewedAt,
+    }],
+    items: queue.items.map((item) => item.videoId === video.id
+      ? { ...item, status: QUEUE_ITEM_STATUSES.PENDING, lastResult: null, updatedAt: reviewedAt }
+      : item),
+    updatedAt: reviewedAt,
+  };
+  try {
+    await persistQueue();
+  } catch (error) {
+    queue = previousQueue;
+    setStudioStatus(error.message || "No se pudo guardar la revisión manual; no se habilitó la prueba.", "error");
+    renderVideos();
+    return;
+  }
+  setStudioStatus("Revisión guardada. Conecta la pestaña de carga y usa “Enviar este video a TikTok Studio” para probarlo.", "success");
+  renderVideos();
 }
 
 function matchesActiveTransfer(message, sender) {

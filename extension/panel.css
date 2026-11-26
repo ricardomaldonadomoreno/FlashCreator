@@ -45,9 +45,12 @@ h2 { margin:0; font-size:13px; letter-spacing:-.2px; }
 .video-size { display:block; margin-top:2px; color:var(--dim); font:8px var(--mono); }
 .video-state { display:block; margin-top:2px; color:var(--celadon); font-size:8px; }
 .video-actions { display:flex; gap:2px; }
-.video-transfer { grid-column:2/4; width:100%; min-height:25px; padding:4px 7px; border:1px solid rgba(169,205,190,.22); border-radius:6px; color:var(--celadon); background:rgba(169,205,190,.04); font-size:8px; font-weight:700; cursor:pointer; }
-.video-transfer:hover { border-color:rgba(169,205,190,.5); background:rgba(169,205,190,.09); }
-.video-transfer:disabled { opacity:.48; cursor:not-allowed; }
+.video-transfer { grid-column:2/4; width:100%; min-height:32px; padding:5px 7px; border:1px solid rgba(169,205,190,.55); border-radius:6px; color:#0b1325; background:var(--celadon); font-size:9px; font-weight:800; cursor:pointer; }
+.video-transfer:hover { border-color:#d0ecdf; background:#c2dfd2; }
+.video-transfer:disabled { opacity:.7; color:#d6ded9; background:rgba(169,205,190,.09); cursor:not-allowed; }
+.video-transfer.review-needed { border-color:rgba(242,181,58,.7); color:#251b08; background:var(--gold); }
+.video-transfer.review-needed:hover { border-color:#ffd875; background:#f6c454; }
+.video-transfer.review-needed:disabled { color:#ead8aa; background:rgba(242,181,58,.12); }
 .icon-button { width:23px; height:23px; display:grid; place-items:center; padding:0; border:1px solid transparent; border-radius:6px; color:#8795a7; background:transparent; cursor:pointer; }
 .icon-button:hover { color:var(--celadon); border-color:var(--line); background:rgba(255,255,255,.03); }
 .icon-button.remove:hover { color:#ff9a83; border-color:rgba(255,154,131,.2); }

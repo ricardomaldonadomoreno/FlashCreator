@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Flash Creator",
   "short_name": "Flash Creator",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Prepara en tu equipo una cola local de videos y su agenda para TikTok Studio.",
   "minimum_chrome_version": "114",
   "permissions": [
