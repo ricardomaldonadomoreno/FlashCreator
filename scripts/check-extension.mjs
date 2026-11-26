@@ -16,4 +16,26 @@ if (!adapter.includes('location.origin === "https://www.tiktok.com"') || !adapte
   throw new Error("El adaptador debe autolimitarse al host y ruta de carga admitidos.");
 }
 
-console.log("Manifiesto validado: conexión por acción explícita con activeTab/scripting; sin cookies, tabs ni hosts persistentes.");
+const bridge = await readFile(new URL("../extension/transfer/bridge.js", import.meta.url), "utf8");
+const resources = manifest.web_accessible_resources ?? [];
+if (resources.length !== 1
+  || JSON.stringify(resources[0].resources) !== JSON.stringify(["transfer/bridge.html", "transfer/bridge.js"])
+  || JSON.stringify(resources[0].matches) !== JSON.stringify(["https://www.tiktok.com/tiktokstudio/upload*"])) {
+  throw new Error("El puente solo puede exponerse en la ruta de carga de TikTok Studio.");
+}
+if (!adapter.includes('attachShadow({ mode: "closed" })')
+  || !adapter.includes("new MessageChannel()")
+  || !adapter.includes("iframe.contentWindow.postMessage")
+  || adapter.includes('postMessage("') && adapter.includes(', "*"')) {
+  throw new Error("El adaptador debe usar un canal privado, Shadow DOM cerrado y un origen de destino explícito.");
+}
+if (!bridge.includes("getVideoForTransfer") || !bridge.includes("Blob.slice") && !bridge.includes("record.blob.slice")
+  || !bridge.includes("CHUNK_ACK")) {
+  throw new Error("La transferencia debe leer un video local y usar fragmentos con ACK.");
+}
+if (/\b(?:btoa|atob)\s*\(/.test(adapter + bridge)
+  || /FileReader|readAsDataURL|toDataURL/.test(adapter + bridge)) {
+  throw new Error("El transporte de video no puede convertir el archivo a Base64.");
+}
+
+console.log("Manifiesto validado: conexión y transferencia supervisadas, sin permisos de cuenta ni transporte Base64.");

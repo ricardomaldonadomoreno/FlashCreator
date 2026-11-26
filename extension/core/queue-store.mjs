@@ -12,7 +12,6 @@ export const QUEUE_ITEM_STATUSES = Object.freeze({
 const VALID_ITEM_STATUSES = new Set(Object.values(QUEUE_ITEM_STATUSES));
 const ACTIVE_ITEM_STATUSES = new Set([
   QUEUE_ITEM_STATUSES.PREPARING,
-  QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION,
 ]);
 const LOCKED_ITEM_STATUSES = new Set([
   QUEUE_ITEM_STATUSES.PREPARING,
@@ -198,7 +197,7 @@ export function queueItemStatusLabel(status) {
   const labels = {
     [QUEUE_ITEM_STATUSES.PENDING]: "En cola local · sin enviar",
     [QUEUE_ITEM_STATUSES.PREPARING]: "Preparando",
-    [QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION]: "Pendiente de confirmar",
+    [QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION]: "Archivo en Studio · revisión manual pendiente",
     [QUEUE_ITEM_STATUSES.SCHEDULED]: "Estado local: programado (sin confirmar)",
     [QUEUE_ITEM_STATUSES.FAILED]: "Error · revisa antes de reintentar",
     [QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION]: "Interrumpido · verifica antes de reintentar",

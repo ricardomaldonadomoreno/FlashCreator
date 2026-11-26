@@ -1,7 +1,7 @@
 import { addVideos, findPossibleDuplicateFiles, listVideoMetadata, removeVideo } from "./core/local-media-store.mjs";
 import { DEFAULT_SCHEDULE, formatSlotForDisplay, planSchedule } from "./core/scheduler.mjs";
 import { isSupportedStudioUploadUrl, TIKTOK_STUDIO_UPLOAD_URL } from "./core/studio-target.mjs";
-import { queueIsEditable, queueItemStatusLabel, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
+import { MAX_PRE_SUBMIT_RETRIES, queueIsEditable, queueItemStatusLabel, QUEUE_ITEM_STATUSES, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
 
 const elements = {
   picker: document.querySelector("#video-picker"),
@@ -20,6 +20,8 @@ let queue;
 let videos = [];
 let configSaveTimer = null;
 let isImporting = false;
+let connectedTabId = null;
+let activeTransfer = null;
 
 const sizeLabel = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -83,6 +85,33 @@ function renderVideos() {
       createButton("×", "Quitar video y borrarlo del almacenamiento local", () => deleteVideo(video.id), !canEditQueue, "remove"),
     );
     row.append(number, content, actions);
+
+    const activeForVideo = activeTransfer?.videoId === video.id;
+    const canRetryBeforeSubmit = queueItem?.status === QUEUE_ITEM_STATUSES.FAILED
+      && queueItem.lastResult?.phase === "before_submit"
+      && queueItem.lastResult?.retryable === true
+      && queueItem.attemptCount <= MAX_PRE_SUBMIT_RETRIES;
+    const canStartTransfer = queueItem?.status === QUEUE_ITEM_STATUSES.PENDING || canRetryBeforeSubmit;
+    if (activeForVideo || canStartTransfer) {
+      const transferButton = document.createElement("button");
+      transferButton.type = "button";
+      transferButton.className = "video-transfer";
+      if (activeForVideo) {
+        transferButton.textContent = activeTransfer.stage === "awaiting_review"
+          ? "Archivo en Studio · revisar allí"
+          : "Cancelar transferencia";
+        transferButton.disabled = activeTransfer.stage === "awaiting_review" || activeTransfer.confirmedBeforeSet;
+        transferButton.addEventListener("click", cancelStudioTransfer);
+      } else {
+        transferButton.textContent = "Enviar video a TikTok Studio";
+        transferButton.disabled = !canEditQueue || !connectedTabId || Boolean(activeTransfer);
+        transferButton.title = connectedTabId
+          ? "Transferir solo este video; TikTok podría iniciar la carga al recibirlo."
+          : "Primero conecta la pestaña activa de TikTok Studio.";
+        transferButton.addEventListener("click", () => transferVideoToStudio(video));
+      }
+      row.append(transferButton);
+    }
     elements.videoList.append(row);
   });
 
@@ -284,6 +313,7 @@ async function openStudio() {
 
 async function connectToActiveStudioTab() {
   elements.studioConnect.disabled = true;
+  connectedTabId = null;
   setStudioStatus("Comprobando la pestaña activa…");
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -299,15 +329,260 @@ async function connectToActiveStudioTab() {
     const response = await chrome.tabs.sendMessage(tab.id, { type: "FLASH_CREATOR_STUDIO_PING" });
     if (!response?.ok) throw new Error(response?.message || "El adaptador no pudo confirmar la conexión.");
 
-    const controlCount = response.uploadInputCount;
+    const controlCount = response.eligibleUploadInputCount;
     const controlsMessage = controlCount === 1
-      ? "Se detectó un control de carga."
-      : `Se detectaron ${controlCount} controles de carga.`;
-    setStudioStatus(`Conectado a la ruta de carga. ${controlsMessage} Esta prueba no lee la cuenta, no sube videos ni programa publicaciones.`, "success");
+      ? "Se detectó un control candidato para video."
+      : `Se detectaron ${controlCount} controles candidatos; la transferencia se detendrá si no hay uno claro.`;
+    connectedTabId = tab.id;
+    setStudioStatus(`Conectado a la ruta de carga. ${controlsMessage} La conexión no lee datos de cuenta.`, "success");
   } catch (error) {
     setStudioStatus(error.message || "No se pudo conectar a la pestaña activa.", "error");
   } finally {
     elements.studioConnect.disabled = false;
+    renderVideos();
+  }
+}
+
+function updateQueueItem(videoId, changes) {
+  const updatedAt = new Date().toISOString();
+  queue = {
+    ...queue,
+    items: queue.items.map((item) => item.videoId === videoId
+      ? { ...item, ...changes, updatedAt }
+      : item),
+  };
+}
+
+function matchesActiveTransfer(message, sender) {
+  if (!activeTransfer || message?.transferId !== activeTransfer.transferId
+    || message?.videoId !== activeTransfer.videoId
+    || sender?.id !== chrome.runtime.id
+    || sender?.tab?.id !== activeTransfer.tabId) return false;
+  return isSupportedStudioUploadUrl(sender.tab?.url ?? sender.url);
+}
+
+function metadataMatchesVideo(metadata, video) {
+  return Boolean(metadata && video
+    && metadata.id === video.id
+    && metadata.name === video.name
+    && metadata.size === video.size
+    && metadata.lastModified === video.lastModified
+    && metadata.type === video.type);
+}
+
+function handleStudioRuntimeMessage(message, sender, sendResponse) {
+  if (message?.type === "FLASH_CREATOR_STUDIO_TRANSFER_PROGRESS") {
+    if (!matchesActiveTransfer(message, sender)) return false;
+    activeTransfer.stage = "transferring";
+    activeTransfer.bytesReceived = Math.max(0, Number(message.bytesReceived) || 0);
+    activeTransfer.totalBytes = Math.max(0, Number(message.totalBytes) || 0);
+    const percent = activeTransfer.totalBytes
+      ? Math.min(100, Math.floor(activeTransfer.bytesReceived / activeTransfer.totalBytes * 100))
+      : 0;
+    setStudioStatus(`Transferencia local ${percent}% · ${sizeLabel(activeTransfer.bytesReceived)} de ${sizeLabel(activeTransfer.totalBytes)}. No cierres la pestaña.`, "info");
+    renderVideos();
+    return false;
+  }
+
+  const stateMessages = [
+    "FLASH_CREATOR_STUDIO_TRANSFER_BEFORE_FILE_SET",
+    "FLASH_CREATOR_STUDIO_TRANSFER_FILE_SET",
+    "FLASH_CREATOR_STUDIO_TRANSFER_FAILED",
+  ];
+  if (!stateMessages.includes(message?.type)) return false;
+  if (!matchesActiveTransfer(message, sender)) {
+    sendResponse({ ok: false, message: "El panel no reconoce esta transferencia o la pestaña ya no coincide." });
+    return false;
+  }
+
+  const video = videos.find((item) => item.id === activeTransfer.videoId);
+  if (message.metadata && !metadataMatchesVideo(message.metadata, video)) {
+    sendResponse({ ok: false, message: "Los metadatos del archivo no coinciden con la cola local." });
+    return false;
+  }
+
+  void (async () => {
+    if (message.type === "FLASH_CREATOR_STUDIO_TRANSFER_BEFORE_FILE_SET") {
+      const current = queue.items.find((item) => item.videoId === activeTransfer.videoId);
+      if (!current || current.status !== QUEUE_ITEM_STATUSES.PREPARING) {
+        sendResponse({ ok: false, message: "El estado local cambió; el archivo no se aplicará." });
+        return;
+      }
+      updateQueueItem(activeTransfer.videoId, {
+        status: QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION,
+        lastResult: {
+          code: "file-apply-pending",
+          message: "El archivo está listo en el canal local; verifica el resultado en TikTok Studio.",
+          phase: "after_submit",
+          retryable: false,
+          at: new Date().toISOString(),
+        },
+      });
+      await persistQueue();
+      activeTransfer.confirmedBeforeSet = true;
+      activeTransfer.stage = "applying_file";
+      renderVideos();
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (message.type === "FLASH_CREATOR_STUDIO_TRANSFER_FILE_SET") {
+      const current = queue.items.find((item) => item.videoId === activeTransfer.videoId);
+      if (!current || current.status !== QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION) {
+        sendResponse({ ok: false, message: "El archivo pudo llegar a Studio; el estado quedó sin confirmar." });
+        return;
+      }
+      updateQueueItem(activeTransfer.videoId, {
+        status: QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION,
+        lastResult: {
+          code: "file-selected-in-studio",
+          message: "El archivo quedó en el control de TikTok Studio. Revisa la página; Flash Creator no programa.",
+          phase: "after_submit",
+          retryable: false,
+          at: new Date().toISOString(),
+        },
+      });
+      queue = { ...queue, status: "paused" };
+      await persistQueue();
+      activeTransfer.stage = "awaiting_review";
+      setStudioStatus("El archivo está en el control de TikTok Studio. Revisa allí la carga; no se pulsó Programar.", "success");
+      renderVideos();
+      sendResponse({ ok: true });
+      return;
+    }
+
+    const retryable = message.retryable === true
+      && message.phase === "before_submit"
+      && !activeTransfer.confirmedBeforeSet;
+    updateQueueItem(activeTransfer.videoId, {
+      status: retryable ? QUEUE_ITEM_STATUSES.FAILED : QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION,
+      lastResult: {
+        code: retryable ? "local-transfer-failed" : "transfer-result-uncertain",
+        message: String(message.message || "La transferencia se detuvo; revisa TikTok Studio antes de continuar."),
+        phase: retryable ? "before_submit" : "after_submit",
+        retryable,
+        at: new Date().toISOString(),
+      },
+    });
+    queue = { ...queue, status: retryable ? activeTransfer.previousQueueStatus : "needs_verification" };
+    await persistQueue();
+    setStudioStatus(String(message.message || "La transferencia se detuvo; revisa TikTok Studio antes de continuar."), "error");
+    renderVideos();
+    sendResponse({ ok: true });
+  })().catch((error) => {
+    sendResponse({ ok: false, message: error.message || "No se pudo guardar el estado local." });
+  });
+  return true;
+}
+
+async function markTransferFailureLocally(transfer, error) {
+  if (activeTransfer?.transferId !== transfer.transferId) return;
+  const current = queue.items.find((item) => item.videoId === transfer.videoId);
+  if (![QUEUE_ITEM_STATUSES.PREPARING, QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION].includes(current?.status)) return;
+  const retryable = !transfer.confirmedBeforeSet && current.status === QUEUE_ITEM_STATUSES.PREPARING;
+  updateQueueItem(transfer.videoId, {
+    status: retryable ? QUEUE_ITEM_STATUSES.FAILED : QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION,
+    lastResult: {
+      code: retryable ? "local-transfer-failed" : "transfer-result-uncertain",
+      message: error?.message || "Se perdió la conexión. Revisa TikTok Studio antes de volver a intentarlo.",
+      phase: retryable ? "before_submit" : "after_submit",
+      retryable,
+      at: new Date().toISOString(),
+    },
+  });
+  queue = { ...queue, status: retryable ? transfer.previousQueueStatus : "needs_verification" };
+  await persistQueue();
+}
+
+async function transferVideoToStudio(video) {
+  if (!connectedTabId || activeTransfer || !queueIsEditable(queue)) return;
+  const item = queue.items.find((entry) => entry.videoId === video.id);
+  const mayRetry = item?.status === QUEUE_ITEM_STATUSES.FAILED
+    && item.lastResult?.phase === "before_submit"
+    && item.lastResult?.retryable === true
+    && item.attemptCount <= MAX_PRE_SUBMIT_RETRIES;
+  if (item?.status !== QUEUE_ITEM_STATUSES.PENDING && !mayRetry) return;
+
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (activeTab?.id !== connectedTabId || !isSupportedStudioUploadUrl(activeTab.url)) {
+    connectedTabId = null;
+    setStudioStatus("La pestaña conectada ya no está activa o cambió de ruta. Vuelve a comprobar TikTok Studio.", "error");
+    renderVideos();
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Vas a enviar “${video.name}” (${sizeLabel(video.size)}) al control de carga de TikTok Studio.\n\n` +
+    "La página podría iniciar la carga inmediatamente. Flash Creator no pulsará Programar. Continúa solo si quieres transferir este video ahora.",
+  );
+  if (!confirmed) return;
+
+  const transfer = {
+    transferId: crypto.randomUUID(),
+    videoId: video.id,
+    tabId: connectedTabId,
+    stage: "preparing",
+    bytesReceived: 0,
+    totalBytes: video.size,
+    confirmedBeforeSet: false,
+    previousQueueStatus: queue.status === "planned" ? "planned" : "idle",
+  };
+  const previousQueue = queue;
+  activeTransfer = transfer;
+  const index = queue.videoIds.indexOf(video.id);
+  updateQueueItem(video.id, {
+    status: QUEUE_ITEM_STATUSES.PREPARING,
+    attemptCount: (item?.attemptCount ?? 0) + 1,
+    lastResult: null,
+  });
+  queue = { ...queue, status: "running", index, currentVideoId: video.id };
+  try {
+    await persistQueue();
+  } catch (error) {
+    queue = previousQueue;
+    activeTransfer = null;
+    setStudioStatus(error.message || "No se pudo guardar el estado de la cola; no se inició la transferencia.", "error");
+    renderVideos();
+    return;
+  }
+  renderVideos();
+  setStudioStatus(`Preparando “${video.name}” desde IndexedDB local…`, "info");
+
+  try {
+    const response = await chrome.tabs.sendMessage(connectedTabId, {
+      type: "FLASH_CREATOR_STUDIO_TRANSFER_VIDEO",
+      transferId: transfer.transferId,
+      videoId: video.id,
+      expected: {
+        id: video.id,
+        name: video.name,
+        size: video.size,
+        lastModified: video.lastModified,
+        type: video.type,
+      },
+    });
+    if (!response?.ok) throw new Error(response?.message || "TikTok Studio no confirmó la preparación del archivo.");
+    setStudioStatus(response.message || "El archivo quedó en TikTok Studio para revisión manual.", "success");
+  } catch (error) {
+    await markTransferFailureLocally(transfer, error);
+    setStudioStatus(error.message || "La transferencia se detuvo; revisa TikTok Studio.", "error");
+  } finally {
+    if (activeTransfer?.transferId === transfer.transferId) activeTransfer = null;
+    renderVideos();
+  }
+}
+
+async function cancelStudioTransfer() {
+  const transfer = activeTransfer;
+  if (!transfer || transfer.confirmedBeforeSet) return;
+  try {
+    const response = await chrome.tabs.sendMessage(transfer.tabId, {
+      type: "FLASH_CREATOR_STUDIO_CANCEL_TRANSFER",
+      transferId: transfer.transferId,
+    });
+    if (!response?.ok) setStudioStatus(response?.message || "No se pudo cancelar con seguridad; revisa la pestaña.", "error");
+  } catch (error) {
+    setStudioStatus(error.message || "No se pudo contactar la pestaña; revisa TikTok Studio.", "error");
   }
 }
 
@@ -341,6 +616,7 @@ elements.picker.addEventListener("change", handleImport);
 elements.planButton.addEventListener("click", handlePlan);
 elements.studioOpen.addEventListener("click", openStudio);
 elements.studioConnect.addEventListener("click", connectToActiveStudioTab);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => handleStudioRuntimeMessage(message, sender, sendResponse));
 document.querySelectorAll(".schedule-card input").forEach((input) => {
   input.addEventListener("input", handleScheduleChange);
   input.addEventListener("change", handleScheduleChange);

@@ -1,7 +1,7 @@
 # Plan de desarrollo — Flash Creator
 
-- **Versión:** 1.1
-- **Fecha:** 25 de noviembre de 2026
+- **Versión:** 1.2
+- **Fecha:** 26 de noviembre de 2026
 - **Producto:** Flash Creator. **Auto Poster** es solo la extensión de referencia, no el nombre del producto nuevo.
 **Repositorio:** `ricardomaldonadomoreno/FlashCreator` (público, autorizado por el propietario).
 
@@ -12,10 +12,10 @@ Construir Flash Creator como una plataforma web con una extensión/agente local 
 ## Arquitectura y alcance
 
 - **Web en Vercel:** Next.js App Router para el sitio, panel de cuenta y futuras páginas. Los Route Handlers alojarán endpoints server-side como webhooks. Ningún secreto privado ni clave de proveedor se incluirá en el JavaScript público.
-- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. La beta supervisada podrá interactuar con TikTok Studio únicamente tras una acción explícita del usuario, en la pestaña activa y en la ruta de carga admitida. Usará `activeTab` y `scripting` en vez de cookies o acceso persistente a todo el sitio. La automatización se limita a preparar el formulario y queda detenida antes del clic final de programar; el usuario revisa y confirma en TikTok Studio. Esto describe el comportamiento técnico, no una aprobación de TikTok. La interfaz local seguirá separada; no se incrustará TikTok en un iframe de la web.
+- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. La beta supervisada interactúa con TikTok Studio solo después de una acción explícita, en la pestaña activa y en la ruta de carga admitida. Usa `activeTab` y `scripting`, sin cookies ni hosts persistentes. Para transferir un video local usa un iframe de extensión accesible solo en la ruta admitida, dentro de Shadow DOM cerrado, con nonce y canal `MessageChannel`; envía fragmentos Blob con ACK, no Base64. Cada video requiere confirmación y Flash Creator se detiene antes del clic final de programar. Esto describe el comportamiento técnico, no una aprobación de TikTok. La interfaz local seguirá separada; no se incrustará TikTok en un iframe de la web.
 - **Datos locales:** IndexedDB guarda blobs y metadatos en object stores separados; `chrome.storage.local` guarda preferencias pequeñas y estado recuperable. Los videos, captions completos y cookies no se envían al backend en el flujo normal.
 - **Backend comercial:** rutas server-side y una base pequeña para identidad verificada, licencia, instalaciones autorizadas, suscripciones y eventos de pago. Se propone Supabase Auth/Postgres para el primer lanzamiento por su integración sencilla con Vercel; no se habilitará acceso real hasta configurar credenciales y políticas. Hotmart será el primer adaptador de pago y se mantendrá una interfaz para agregar otras pasarelas.
-- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. La beta del agente abre TikTok Studio a petición y prueba el puente de conexión en la ruta de carga. La carga y el llenado del formulario se habilitarán por etapas; la persona debe revisar la página y efectuar la confirmación final de programación.
+- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. La beta del agente conecta con la ruta admitida y ya incluye una transferencia experimental de un video al control de carga, con progreso y estados recuperables. El ensayo real con clips no críticos y la memoria con videos grandes siguen pendientes. La persona debe revisar la página y efectuar la confirmación final de programación.
 - **Entrega de la extensión:** desarrollo primero como extensión desempaquetada en Chrome; antes de venderla se preparará el paquete y el flujo de distribución de Chrome Web Store.
 
 ## Estructura prevista
@@ -45,7 +45,7 @@ scripts/                 Comandos de desarrollo y empaquetado de la extensión
 - Reintentar una o dos veces únicamente fallos recuperables previos al envío final, con pausa incremental. No repetir automáticamente si TikTok recibió la orden de programar y no confirmó el resultado.
 - Guardar historial local para advertir de posibles duplicados usando nombre, tamaño y fecha de modificación. Permitir omitir, revisar o volver a programar con decisión del usuario.
 - Mantener los blobs de video separados de sus metadatos; listar, ordenar y mostrar elementos sin cargar los blobs. Permitir quitar y reordenar videos.
-- Eliminar base64 del intercambio de archivos. Usar fragmentos binarios con confirmación y liberación de referencias; si TikTok exige retener todo el archivo y las pruebas revelan presión de memoria, revisar antes de prometer compatibilidad con videos de cientos de MB.
+- Eliminar Base64 del intercambio de archivos. La primera iteración usa fragmentos Blob de 4 MiB con ACK y libera referencias tras completar; aún se deben medir Chrome y TikTok Studio con videos de varios tamaños antes de prometer compatibilidad con cientos de MB.
 
 ### Agenda y seguridad del flujo
 
@@ -108,3 +108,4 @@ Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave*
 - [Next.js en Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs)
 - [TikTok Content Posting API](https://developers.tiktok.com/doc/content-posting-api-get-started)
 - [Hotmart Purchase Webhook](https://developers.hotmart.com/docs/en/2.0.0/webhook/purchase-webhook/)
+- [Restricciones y diseño del puente de transferencia local](docs/chrome-file-transfer-design.md)

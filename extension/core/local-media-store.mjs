@@ -149,6 +149,30 @@ export async function getVideoBlob(id) {
   }
 }
 
+/** Reads exactly one video record for a user-confirmed transfer. */
+export async function getVideoForTransfer(id) {
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction([METADATA_STORE, BLOB_STORE], "readonly");
+    const metadataRequest = transaction.objectStore(METADATA_STORE).get(id);
+    const blobRequest = transaction.objectStore(BLOB_STORE).get(id);
+    const [metadata, blobRecord] = await Promise.all([
+      new Promise((resolve, reject) => {
+        metadataRequest.onsuccess = () => resolve(metadataRequest.result ?? null);
+        metadataRequest.onerror = () => reject(metadataRequest.error ?? new Error("No se pudieron leer los metadatos del video."));
+      }),
+      new Promise((resolve, reject) => {
+        blobRequest.onsuccess = () => resolve(blobRequest.result ?? null);
+        blobRequest.onerror = () => reject(blobRequest.error ?? new Error("No se pudo leer el video local."));
+      }),
+    ]);
+    if (!metadata || !blobRecord?.blob) return null;
+    return { metadata, blob: blobRecord.blob };
+  } finally {
+    database.close();
+  }
+}
+
 export async function removeVideo(id) {
   const database = await openDatabase();
   try {

@@ -1,0 +1,43 @@
+export const TRANSFER_CHUNK_SIZE_BYTES = 4 * 1024 * 1024;
+export const TRANSFER_TIMEOUT_MS = 30_000;
+
+const cleanString = (value) => typeof value === "string" ? value.trim() : "";
+
+export function isValidTransferDescriptor(value) {
+  if (!value || typeof value !== "object") return false;
+  const id = cleanString(value.id);
+  const name = cleanString(value.name);
+  return id.length > 0
+    && name.length > 0
+    && Number.isSafeInteger(value.size)
+    && value.size > 0
+    && Number.isSafeInteger(value.lastModified)
+    && value.lastModified >= 0
+    && typeof value.type === "string";
+}
+
+export function transferMetadataMatches(stored, expected, blobSize) {
+  return isValidTransferDescriptor(stored)
+    && isValidTransferDescriptor(expected)
+    && stored.id === expected.id
+    && stored.name === expected.name
+    && stored.size === expected.size
+    && stored.size === blobSize
+    && stored.lastModified === expected.lastModified
+    && stored.type === expected.type;
+}
+
+export function getTransferChunkRange(index, totalBytes, chunkSize = TRANSFER_CHUNK_SIZE_BYTES) {
+  if (!Number.isSafeInteger(index) || index < 0) throw new RangeError("El índice de fragmento no es válido.");
+  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) throw new RangeError("El tamaño del video no es válido.");
+  if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) throw new RangeError("El tamaño del fragmento no es válido.");
+  const start = index * chunkSize;
+  if (start >= totalBytes) throw new RangeError("El fragmento está fuera del video.");
+  return { start, end: Math.min(start + chunkSize, totalBytes) };
+}
+
+export function transferChunkCount(totalBytes, chunkSize = TRANSFER_CHUNK_SIZE_BYTES) {
+  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) throw new RangeError("El tamaño del video no es válido.");
+  if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) throw new RangeError("El tamaño del fragmento no es válido.");
+  return Math.ceil(totalBytes / chunkSize);
+}

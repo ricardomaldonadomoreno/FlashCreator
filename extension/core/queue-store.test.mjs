@@ -126,6 +126,25 @@ test("marks an interrupted in-flight item for verification instead of retrying i
   assert.equal(queue.items[2].status, QUEUE_ITEM_STATUSES.PENDING);
 });
 
+test("preserves a prepared file awaiting manual TikTok review after panel reopen", () => {
+  const queue = recoverInterruptedQueue({
+    version: 2,
+    status: "paused",
+    index: 0,
+    currentVideoId: "video-a",
+    videoIds: ["video-a", "video-b"],
+    items: [
+      { videoId: "video-a", status: QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION },
+      { videoId: "video-b", status: QUEUE_ITEM_STATUSES.PENDING },
+    ],
+  }, "2026-11-25T20:00:00.000Z");
+
+  assert.equal(queue.status, "paused");
+  assert.equal(queue.items[0].status, QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION);
+  assert.equal(queue.items[1].status, QUEUE_ITEM_STATUSES.PENDING);
+  assert.equal(queueIsEditable(queue), false);
+});
+
 test("keeps a non-running draft and its saved schedule unchanged", () => {
   const draft = {
     version: 2,

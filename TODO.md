@@ -39,7 +39,7 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 
 - Flash Creator no llama a la Content Posting API. El agente usa la pestaña y la sesión del navegador del usuario; no solicita ni almacena sus credenciales, cookies, mensajes o analíticas.
 - El Side Panel abre TikTok Studio a petición y solo conecta con una pestaña activa HTTPS que coincida con `www.tiktok.com/tiktokstudio/upload` y sus parámetros de consulta. Si la ruta o el host no coinciden, la operación se detiene sin inyectar el adaptador.
-- La inyección del adaptador ocurre únicamente tras una acción explícita del usuario. La primera etapa informa conexión y presencia de controles de carga; no infiere automáticamente si el usuario inició sesión.
+- La inyección del adaptador ocurre únicamente tras una acción explícita del usuario. El adaptador confirma la ruta y candidatos de control de video; no infiere si el usuario inició sesión.
 - Usar `activeTab` y `scripting` para acceso temporal. No solicitar `cookies`, `tabs`, permisos permanentes de host ni ejecutar el adaptador en rutas distintas a la de carga.
 - El llenado/carga se implementa en pasos visibles, con estado y errores en el Side Panel. Antes de transferir un video, el usuario revisa qué clip va a enviar y confirma la acción; los archivos se leen desde el almacén local y no pasan por un servidor de Flash Creator.
 - Después de preparar los metadatos y el horario en TikTok Studio, la beta se detiene. El usuario revisa el formulario en la página de TikTok y pulsa manualmente la acción final para programar; no se hace clic automáticamente en “Programar”.
@@ -48,12 +48,13 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 - No se incorpora el antiguo host de licencias `sslip.io`.
 - La Content Posting API oficial se conserva como opción independiente, documentada en `docs/tiktok-content-posting-api-enablement.md`; no se mezcla con la beta del navegador ni se presenta como vía de programación futura.
 
-## 6. Transferencia de archivos grandes — Pendiente
+## 6. Transferencia de archivos grandes — En progreso
 
-- La extensión elimina el transporte base64 entre service worker y pestaña de TikTok.
-- La transferencia usa fragmentos binarios acotados con confirmación y libera referencias al terminar.
-- El procesamiento evita copias simultáneas innecesarias y maneja pestañas cerradas, cortes de red, cuota llena y archivos desaparecidos.
-- Si el formulario de TikTok obliga a retener una copia completa y las mediciones muestran presión de memoria, se revisan alternativas antes de prometer soporte para videos de cientos de MB.
+- Se eliminó el uso de Base64 para el archivo. La primera transferencia experimental pasa `Blob.slice()` de 4 MiB por un `MessageChannel` en un iframe de extensión dentro de un Shadow DOM cerrado, con nonce, ACK por fragmento y progreso visible.
+- El panel guarda el estado antes de asignar el `File` al input. Una interrupción antes de esa frontera puede reintentarse solo de forma manual; después de ella el estado requiere revisión humana y nunca se reenvía automáticamente.
+- Se mantiene el tamaño máximo de biblioteca de 2 GiB, pero esto no constituye una promesa de compatibilidad de transferencia para archivos tan grandes. Deben probarse clips no críticos de varios tamaños en Chrome y observar errores/presión de memoria.
+- El protocolo evita convertir el video en un `ArrayBuffer` o Base64 completo; aun así, el comportamiento interno de memoria del navegador y la respuesta de TikTok Studio no se garantizan hasta completar pruebas en cuentas autorizadas.
+- La selección del input requiere exactamente un candidato de video. Si no hay ninguno o hay varios, se detiene para evitar elegir un control ambiguo.
 
 ## 7. Resolución segura de enlaces de producto TikTok Shop — Pendiente
 
