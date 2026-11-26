@@ -12,10 +12,10 @@ Construir Flash Creator como una plataforma web con una extensión/agente local 
 ## Arquitectura y alcance
 
 - **Web en Vercel:** Next.js App Router para el sitio, panel de cuenta y futuras páginas. Los Route Handlers alojarán endpoints server-side como webhooks. Ningún secreto privado ni clave de proveedor se incluirá en el JavaScript público.
-- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. No se inyectarán scripts ni se leerá o controlará TikTok Studio hasta confirmar una autorización escrita o una vía oficial aprobada que lo permita. La interfaz de configuración local seguirá separada de la página de TikTok; no se intentará incrustar TikTok en un iframe de la web.
+- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. La beta supervisada podrá interactuar con TikTok Studio únicamente tras una acción explícita del usuario, en la pestaña activa y en la ruta de carga admitida. Usará `activeTab` y `scripting` en vez de cookies o acceso persistente a todo el sitio. La automatización se limita a preparar el formulario y queda detenida antes del clic final de programar; el usuario revisa y confirma en TikTok Studio. Esto describe el comportamiento técnico, no una aprobación de TikTok. La interfaz local seguirá separada; no se incrustará TikTok en un iframe de la web.
 - **Datos locales:** IndexedDB guarda blobs y metadatos en object stores separados; `chrome.storage.local` guarda preferencias pequeñas y estado recuperable. Los videos, captions completos y cookies no se envían al backend en el flujo normal.
 - **Backend comercial:** rutas server-side y una base pequeña para identidad verificada, licencia, instalaciones autorizadas, suscripciones y eventos de pago. Se propone Supabase Auth/Postgres para el primer lanzamiento por su integración sencilla con Vercel; no se habilitará acceso real hasta configurar credenciales y políticas. Hotmart será el primer adaptador de pago y se mantendrá una interfaz para agregar otras pasarelas.
-- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. El agente no afirmará que ya sube ni programa videos; la integración queda condicionada a autorización escrita o una vía oficial aprobada.
+- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. La beta del agente abre TikTok Studio a petición y prueba el puente de conexión en la ruta de carga. La carga y el llenado del formulario se habilitarán por etapas; la persona debe revisar la página y efectuar la confirmación final de programación.
 - **Entrega de la extensión:** desarrollo primero como extensión desempaquetada en Chrome; antes de venderla se preparará el paquete y el flujo de distribución de Chrome Web Store.
 
 ## Estructura prevista
@@ -28,7 +28,7 @@ extension/
   manifest.json          Manifiesto MV3 y permisos mínimos
   background.js          Coordinación de cola y service worker
   panel.html/js/css      Side Panel que acompaña TikTok Studio
-  content/               Adaptador de interfaz de TikTok Studio
+  content/               Adaptador de interfaz de TikTok Studio, inyectado a petición
   lib/                   IndexedDB local, cola, agenda y resolvedores seguros
   locales/               Textos del agente; i18n cuando el flujo se estabilice
 supabase/                Esquema/migraciones del backend, sin datos locales de video
@@ -52,8 +52,9 @@ scripts/                 Comandos de desarrollo y empaquetado de la extensión
 - Configurar intervalo, ventana horaria permitida, días activos, tope por día y variación aleatoria pequeña.
 - Calcular y persistir de antemano los slots de toda la cola, con zona horaria explícita; reanudar sin cambiar horarios automáticamente.
 - Validar antes de comenzar que todos los slots respetan ventana, tope y horizonte que permita TikTok Studio para la cuenta. No asumir que un límite visible en una cuenta es universal.
-- Solo si existe autorización escrita o integración oficial aprobada, evaluar cualquier comprobación automatizada del formulario, de la fecha/hora o de la acción final. Sin esa aprobación, el ensayo se limita a validar los datos locales y no leerá ni modificará la página de TikTok.
-- Mantener `cookies`, `tabs`, `scripting` y hosts TikTok fuera del manifiesto hasta que exista autorización. Mientras tanto, el usuario revisará manualmente su propia sesión; Flash Creator no inferirá su estado de login.
+- El acceso a TikTok Studio comienza solo tras una acción explícita en el Side Panel y se limita a la pestaña activa cuya URL sea exactamente la ruta HTTPS de carga compatible. La primera etapa solo confirma conexión y presencia de un control de carga; no lee perfil, cookies, mensajes ni analíticas.
+- Para la beta supervisada, usar `activeTab` y `scripting` para inyectar el adaptador bajo demanda. No pedir `cookies`, `tabs` ni permisos persistentes de host; no ejecutar scripts en segundo plano ni en otras rutas. El usuario verifica manualmente que su sesión esté abierta.
+- La etapa de preparación del formulario debe mostrar el video y el horario, y detenerse para revisión humana. No pulsar automáticamente la acción final de programar en esta beta; una automatización final requerirá una fase separada y consentimiento explícito.
 - El resolvedor de enlaces acepta solo HTTPS/HTTP en hostnames de TikTok incluidos en allowlist, valida cada salto de redirección y rechaza protocolos, dominios y hosts falsificados.
 
 ### Producto, acceso y evolución
@@ -86,7 +87,7 @@ Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave*
 
 1. **Base del producto:** estructura Next.js y agente lateral, paleta, importación local, metadatos/blobs separados y agenda preliminar.
 2. **Núcleo robusto:** persistencia de cola e índice, historial, reintentos seguros, transferencia binaria, reordenamiento y cálculo completo de horarios.
-3. **Compatibilidad con TikTok (condicionada):** primero confirmar autorización escrita o una vía oficial aprobada. Hasta entonces, modo de ensayo local sin hosts, lectura del DOM, detección automatizada de sesión, carga ni clics en TikTok. Evaluar Content Posting API como vía separada, sin prometer programación futura.
+3. **Beta supervisada de TikTok Studio:** conexión explícita a la pestaña activa de carga; luego transferencia local y preparación del formulario con controles y progreso; detenerse antes de la acción final para revisión y clic manual del usuario. La automatización de TikTok Studio no se presenta como aprobada por TikTok. La Content Posting API queda como alternativa separada y no es requisito de esta beta.
 4. **Cuenta y pagos:** login verificado, política de acceso, esquema de base, token temporal de extensión, webhook Hotmart idempotente y adaptador de pagos.
 5. **Beta y distribución:** validación con cuentas de prueba, reinicios, red irregular, cuotas locales, zonas horarias y límites; preparar privacidad, soporte y distribución Web Store.
 6. **Evolución:** localización, formatos nuevos como `.webm` solo tras comprobar compatibilidad, integraciones de IA configurables y otros proveedores de pago.
@@ -96,7 +97,7 @@ Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave*
 - Cambios en TikTok Studio pueden invalidar selectores; el adaptador debe ser reemplazable y fallar con explicación, no hacer clic a ciegas.
 - Una confirmación perdida después de enviar es un riesgo de duplicación; el resultado debe quedar “por verificar”.
 - La PC y Chrome deben seguir activos mientras el agente carga y programa. Cuando TikTok confirme que cada publicación futura quedó programada en sus servidores, apagar la PC no debe cancelar esas publicaciones ya aceptadas.
-- Los términos globales de TikTok restringen el uso de scripts automatizados para recopilar información o interactuar con sus servicios y condicionan ciertos usos comerciales; el adaptador de UI queda bloqueado hasta revisar autorización escrita o confirmar una vía aprobada. Ver `docs/tiktok-studio-compatibility-review.md`.
+- La documentación global de TikTok incluye restricciones sobre scripts automatizados que interactúan con sus servicios; la beta local se construirá bajo decisión explícita del propietario, con acciones visibles, permisos mínimos y confirmación manual final. La implementación no equivale a autorización oficial ni garantiza que TikTok apruebe el uso comercial. Ver `docs/tiktok-studio-compatibility-review.md`.
 - La disponibilidad de funciones de TikTok Studio puede variar por cuenta, país o versión. No prometer compatibilidad universal sin pruebas autorizadas.
 - El control de licencia protege el servicio, pero no vuelve imposible inspeccionar/modificar una extensión ejecutada localmente; la autoridad de acceso y secretos permanecen server-side.
 

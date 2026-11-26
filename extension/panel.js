@@ -1,5 +1,6 @@
 import { addVideos, findPossibleDuplicateFiles, listVideoMetadata, removeVideo } from "./core/local-media-store.mjs";
 import { DEFAULT_SCHEDULE, formatSlotForDisplay, planSchedule } from "./core/scheduler.mjs";
+import { isSupportedStudioUploadUrl, TIKTOK_STUDIO_UPLOAD_URL } from "./core/studio-target.mjs";
 import { queueIsEditable, queueItemStatusLabel, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
 
 const elements = {
@@ -10,6 +11,9 @@ const elements = {
   planButton: document.querySelector("#plan-button"),
   scheduleErrors: document.querySelector("#schedule-errors"),
   scheduleList: document.querySelector("#schedule-list"),
+  studioOpen: document.querySelector("#studio-open"),
+  studioConnect: document.querySelector("#studio-connect"),
+  studioStatus: document.querySelector("#studio-status"),
 };
 
 let queue;
@@ -264,6 +268,49 @@ async function handlePlan() {
   renderSchedule();
 }
 
+function setStudioStatus(message, state = "info") {
+  elements.studioStatus.textContent = message;
+  elements.studioStatus.dataset.state = state;
+}
+
+async function openStudio() {
+  try {
+    await chrome.tabs.create({ url: TIKTOK_STUDIO_UPLOAD_URL });
+    setStudioStatus("TikTok Studio se abrió en otra pestaña. Ve a ella, inicia sesión si hace falta y abre Flash Creator desde el icono de extensiones; luego comprueba la pestaña activa.");
+  } catch (error) {
+    setStudioStatus(error.message || "No se pudo abrir TikTok Studio.", "error");
+  }
+}
+
+async function connectToActiveStudioTab() {
+  elements.studioConnect.disabled = true;
+  setStudioStatus("Comprobando la pestaña activa…");
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab?.id) throw new Error("No se encontró una pestaña activa.");
+    if (!isSupportedStudioUploadUrl(tab.url)) {
+      throw new Error("Abre https://www.tiktok.com/tiktokstudio/upload en la pestaña activa y vuelve a intentarlo.");
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content/studio-adapter.js"],
+    });
+    const response = await chrome.tabs.sendMessage(tab.id, { type: "FLASH_CREATOR_STUDIO_PING" });
+    if (!response?.ok) throw new Error(response?.message || "El adaptador no pudo confirmar la conexión.");
+
+    const controlCount = response.uploadInputCount;
+    const controlsMessage = controlCount === 1
+      ? "Se detectó un control de carga."
+      : `Se detectaron ${controlCount} controles de carga.`;
+    setStudioStatus(`Conectado a la ruta de carga. ${controlsMessage} Esta prueba no lee la cuenta, no sube videos ni programa publicaciones.`, "success");
+  } catch (error) {
+    setStudioStatus(error.message || "No se pudo conectar a la pestaña activa.", "error");
+  } finally {
+    elements.studioConnect.disabled = false;
+  }
+}
+
 async function initialize() {
   try {
     queue = await readQueue();
@@ -292,6 +339,8 @@ async function initialize() {
 
 elements.picker.addEventListener("change", handleImport);
 elements.planButton.addEventListener("click", handlePlan);
+elements.studioOpen.addEventListener("click", openStudio);
+elements.studioConnect.addEventListener("click", connectToActiveStudioTab);
 document.querySelectorAll(".schedule-card input").forEach((input) => {
   input.addEventListener("input", handleScheduleChange);
   input.addEventListener("change", handleScheduleChange);

@@ -6,12 +6,12 @@ Flash Creator es el producto nuevo. **Auto Poster** es únicamente la extensión
 
 - La web usa Next.js App Router y está preparada para desplegarse en Vercel.
 - `extension/` contiene una extensión Manifest V3 con Side Panel. En esta versión permite agregar `.mp4`/`.mov` de hasta 2 GiB por archivo, guardar los archivos en IndexedDB con metadatos separados de los blobs, ordenar/quitar clips y preparar una vista previa de agenda.
-- La extensión no pide permisos de `cookies`, `tabs` ni `scripting`, y no tiene hosts TikTok autorizados todavía. Aún no inicia sesión, sube ni programa publicaciones.
+- La extensión usa `activeTab` y `scripting` para una conexión temporal a la pestaña activa solo cuando el usuario lo solicita. No pide `cookies`, `tabs` ni hosts TikTok persistentes. La conexión inicial no sube ni programa publicaciones; la transferencia local y el llenado supervisado del formulario se desarrollarán por etapas.
 - Los archivos no se envían al servidor. La integración de acceso, base comercial y webhooks de Hotmart se implementará en una fase posterior con secretos solo en el servidor.
 
 ## Alcance de TikTok
 
-La extensión no inspecciona ni automatiza TikTok Studio. La revisión de términos oficiales y alternativas aprobadas está en [la evaluación de compatibilidad con TikTok](docs/tiktok-studio-compatibility-review.md). El ensayo actual valida únicamente datos locales; cualquier integración futura queda condicionada a autorización escrita de TikTok o a una vía oficial aprobada.
+La extensión no usa la API de TikTok. La beta supervisada se conectará, a petición del usuario, con la página de carga de TikTok Studio en la pestaña activa; el usuario revisará el formulario y confirmará manualmente la programación. La conexión, carga y automatización se añadirán en etapas distintas. Esto no significa que TikTok haya aprobado el uso. La decisión y las fuentes están en [la evaluación de compatibilidad con TikTok](docs/tiktok-studio-compatibility-review.md).
 
 ## Requisitos y comandos
 
@@ -32,7 +32,8 @@ pnpm build
 2. Activa **Modo de desarrollador**.
 3. Elige **Cargar descomprimida** y selecciona la carpeta `extension/`.
 4. Pulsa el icono de Flash Creator para abrir el Side Panel.
-5. Agrega clips de prueba. La vista previa solo calcula horarios; no envía los videos a TikTok.
+5. Agrega clips de prueba y calcula la vista previa de horarios. En esta versión todavía no se transfieren videos a TikTok.
+6. Para probar el puente, abre TikTok Studio, cambia a esa pestaña y abre Flash Creator desde el icono de extensiones; pulsa **Comprobar pestaña activa**. La prueba solo comprueba la ruta y los controles de archivo; no carga ni programa.
 
 La versión actual está en fase local de desarrollo. No redistribuir como versión comercial ni confiar en su agenda como límite detectado automáticamente: el horizonte que muestra es configurable y debe verificarse en TikTok Studio.
 

@@ -4,13 +4,13 @@
 
 **Producto:** Flash Creator
 
-## Hallazgo y decisión
+## Hallazgo y decisión del producto
 
 TikTok confirma que TikTok Studio en navegador permite cargar, programar y editar publicaciones, y que las herramientas para creadores están disponibles para cuentas personales y de empresa. La disponibilidad de funciones puede variar por región y por requisitos de la cuenta [1] [2]. Esto confirma que el flujo nativo de Studio existe, pero no autoriza a Flash Creator a controlarlo automáticamente.
 
-Los términos globales de TikTok prohíben usar scripts automatizados para recopilar información o interactuar con sus servicios. Los términos de EE. UU. también prohíben extraer datos mediante software automatizado salvo aprobación escrita. Como Flash Creator busca distribuir una herramienta comercial, los propios términos globales incluyen restricciones adicionales para uso comercial o incorporación de los servicios a otros productos sin consentimiento expreso [3] [4]. No se puede concluir que un ensayo de solo lectura, un content script o una detección de marcadores visibles quede exento. Por eso no se implementará inspección del DOM, lectura automatizada de estado/campos, ni interacción con TikTok Studio hasta obtener autorización escrita de TikTok o confirmar una vía aprobada aplicable.
+Los términos globales de TikTok prohíben usar scripts automatizados para recopilar información de los servicios o interactuar con ellos. Los términos de EE. UU. revisados describen una restricción centrada en la extracción automatizada de datos; esa diferencia no permite generalizar una conclusión igual para todas las regiones [3] [4]. El proyecto no afirma que el uso local, la ausencia de extracción de datos ni la confirmación manual constituyan autorización de TikTok.
 
-La extensión seguirá sin hosts TikTok, `content_scripts`, `scripting`, `tabs` o `cookies`. El ensayo permitido por ahora se limita a preparar y validar datos locales en Flash Creator; el usuario puede abrir Studio y revisar la interfaz manualmente. No se subirán videos, no se pulsará ningún control de TikTok y no se leerá información de una página de TikTok.
+La decisión actual del propietario es construir una beta supervisada que usa el navegador y la sesión iniciada por el usuario, sin la Content Posting API y sin enviar archivos al backend de Flash Creator. El acceso será bajo demanda a la pestaña activa, con permisos temporales mínimos y limitado a la ruta de carga. La beta detendrá el flujo antes de pulsar la acción final de programar, para que el usuario revise y confirme manualmente. Este alcance reduce el acceso técnico, pero no cambia por sí solo el significado de los términos aplicables ni equivale a autorización comercial.
 
 ## Vía oficial a evaluar por separado
 
@@ -18,9 +18,9 @@ La Content Posting API oficial requiere registrar una aplicación, configurar el
 
 En las páginas oficiales revisadas no se encontró un parámetro de programación futura en el flujo Direct Post documentado. Por tanto, no se presentará esa API como sustituto probado de la agenda de TikTok Studio. La capacidad de programar mediante API debe confirmarse con documentación oficial vigente y aprobación de TikTok antes de diseñarla.
 
-## Alcance de ensayo por ahora
+## Alcance de implementación acordado
 
-Se mantiene la biblioteca, la cola, los horarios calculados y las verificaciones puramente locales. Se pueden probar cambios de ruta, formatos y estados con datos simulados propios, sin reproducir selectores ni inspeccionar el DOM real de TikTok. Una validación de integración en cuenta requeriría primero autorización y luego la participación manual del usuario; no se solicitarán credenciales ni se operará su cuenta desde esta fase.
+La primera etapa conecta a la página de carga exacta a petición del usuario y reporta solo si el adaptador y los controles de carga están disponibles. Las siguientes etapas pueden transferir un archivo de la biblioteca local y preparar los campos; cualquier envío debe estar indicado claramente en el panel y confirmado por el usuario. La programación final queda en manos del usuario. El código no solicitará contraseñas ni cookies, no inspeccionará otras áreas de la cuenta y no ocultará que automatiza controles de la página. La eventual distribución comercial sigue sujeta a los términos aplicables y a cualquier autorización que TikTok determine necesaria.
 
 ## Referencias
 

@@ -35,16 +35,18 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 - No se hace reintento automático después de pulsar “Programar” cuando TikTok no confirmó el resultado.
 - El historial local avisa de posibles duplicados usando nombre, tamaño y fecha de modificación; el usuario decide si omite, revisa o programa de nuevo.
 
-## 5. Compatibilidad con TikTok y permisos mínimos — Bloqueada para automatización hasta autorización
+## 5. Beta supervisada de TikTok Studio y permisos mínimos — En progreso
 
-- La extensión no inyecta scripts, no lee ni modifica el DOM de TikTok, no detecta automáticamente sesión o campos, no sube videos ni activa controles de TikTok mientras no exista autorización escrita de TikTok o una integración oficial aprobada aplicable. La decisión y las fuentes están en `docs/tiktok-studio-compatibility-review.md`.
-- El modo ensayo actual solo valida datos locales de cola y agenda; no consulta ni interactúa con una pestaña de TikTok. El usuario puede revisar manualmente su cuenta e interfaz sin compartir credenciales.
-- Si se confirma una vía autorizada, el adaptador será reemplazable y usará únicamente los permisos/hosts aprobados estrictamente necesarios, con validación de cuenta y formulario antes de cualquier acción.
-- Aun con autorización futura, un modo de prueba separado deberá permitir revisar el formulario sin subir ni pulsar “Programar”; la programación real requerirá criterios de aceptación y consentimiento explícitos en otra fase.
-- Se mantiene la prohibición de añadir `cookies`, `tabs`, `scripting` o hosts TikTok por anticipado; cada permiso que se proponga deberá tener justificación y pruebas de Chrome.
+- Flash Creator no llama a la Content Posting API. El agente usa la pestaña y la sesión del navegador del usuario; no solicita ni almacena sus credenciales, cookies, mensajes o analíticas.
+- El Side Panel abre TikTok Studio a petición y solo conecta con una pestaña activa HTTPS que coincida con `www.tiktok.com/tiktokstudio/upload` y sus parámetros de consulta. Si la ruta o el host no coinciden, la operación se detiene sin inyectar el adaptador.
+- La inyección del adaptador ocurre únicamente tras una acción explícita del usuario. La primera etapa informa conexión y presencia de controles de carga; no infiere automáticamente si el usuario inició sesión.
+- Usar `activeTab` y `scripting` para acceso temporal. No solicitar `cookies`, `tabs`, permisos permanentes de host ni ejecutar el adaptador en rutas distintas a la de carga.
+- El llenado/carga se implementa en pasos visibles, con estado y errores en el Side Panel. Antes de transferir un video, el usuario revisa qué clip va a enviar y confirma la acción; los archivos se leen desde el almacén local y no pasan por un servidor de Flash Creator.
+- Después de preparar los metadatos y el horario en TikTok Studio, la beta se detiene. El usuario revisa el formulario en la página de TikTok y pulsa manualmente la acción final para programar; no se hace clic automáticamente en “Programar”.
+- Si la pestaña se cierra o el resultado de una acción externa queda incierto, el elemento pasa a “por verificar”; no se repite automáticamente una carga o programación que pudo haber sido aceptada.
+- No se declara que TikTok haya autorizado o aprobado esta automatización. El comportamiento local, los permisos mínimos y la confirmación manual no equivalen por sí solos a permiso comercial o garantía de conformidad.
 - No se incorpora el antiguo host de licencias `sslip.io`.
-- El panel lateral conserva el estado local al cerrarse y reabrirse, sin depender de leer datos de TikTok.
-- La Content Posting API se evalúa separadamente: confirmar requisitos de aplicación, aprobación, scopes, auditoría, UX y si la programación futura está soportada antes de elegirla.
+- La Content Posting API oficial se conserva como opción independiente, documentada en `docs/tiktok-content-posting-api-enablement.md`; no se mezcla con la beta del navegador ni se presenta como vía de programación futura.
 
 ## 6. Transferencia de archivos grandes — Pendiente
 

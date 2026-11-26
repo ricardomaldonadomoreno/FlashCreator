@@ -78,3 +78,14 @@ h2 { margin:0; font-size:13px; letter-spacing:-.2px; }
 .footer-lock { color:var(--gold); font-size:14px; }
 .footer-note p { margin:0; color:var(--dim); font-size:8px; line-height:1.6; }
 .footer-note strong { color:#aab4c0; font-weight:700; }
+.studio-card { border-color:rgba(242,181,58,.2); }
+.studio-indicator { color:var(--gold); font-size:9px; }
+.studio-copy { margin:0 0 9px; }
+.studio-actions { display:grid; gap:7px; }
+.button-secondary { width:100%; min-height:33px; display:flex; align-items:center; justify-content:center; padding:0 9px; border:1px solid rgba(169,205,190,.22); border-radius:8px; color:#cbd5d2; background:rgba(169,205,190,.04); font-size:9px; font-weight:700; cursor:pointer; }
+.button-secondary:hover { border-color:rgba(169,205,190,.48); background:rgba(169,205,190,.08); }
+.button-secondary:disabled { opacity:.5; cursor:not-allowed; }
+.studio-actions .button-primary { margin-top:0; }
+.studio-status { margin:9px 1px 0; color:var(--dim); font-size:8px; line-height:1.55; }
+.studio-status[data-state="success"] { color:var(--celadon); }
+.studio-status[data-state="error"] { color:#ffb3a2; }
