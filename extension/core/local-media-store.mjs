@@ -38,6 +38,35 @@ function transact(database, stores, mode, operation) {
 
 export const MAX_VIDEO_SIZE_BYTES = 2 * 1024 ** 3;
 
+function duplicateFingerprint(file) {
+  const name = String(file?.name ?? "").normalize("NFC").trim().toLowerCase();
+  const size = Number(file?.size);
+  const lastModified = Number(file?.lastModified);
+  if (!name || !Number.isFinite(size) || size < 0 || !Number.isFinite(lastModified) || lastModified < 0) return null;
+  return JSON.stringify([name, size, lastModified]);
+}
+
+/** Match likely duplicate metadata only; this does not read or hash video blobs. */
+export function findPossibleDuplicateFiles(files, existingMetadata = []) {
+  const known = new Map();
+  for (const record of existingMetadata) {
+    const fingerprint = duplicateFingerprint(record);
+    if (fingerprint && !known.has(fingerprint)) known.set(fingerprint, record.name);
+  }
+
+  const duplicates = [];
+  [...files].forEach((file, index) => {
+    const fingerprint = duplicateFingerprint(file);
+    if (!fingerprint) return;
+    if (known.has(fingerprint)) {
+      duplicates.push({ index, name: file.name, matchesName: known.get(fingerprint) });
+    } else {
+      known.set(fingerprint, file.name);
+    }
+  });
+  return duplicates;
+}
+
 export function validateVideoFile(file) {
   const extensionOkay = /\.(mp4|mov)$/i.test(file.name);
   const mimeOkay = !file.type || ["video/mp4", "video/quicktime", "application/octet-stream"].includes(file.type.toLowerCase());

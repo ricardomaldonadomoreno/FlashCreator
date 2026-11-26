@@ -16,6 +16,7 @@ El estado se marca por resultado entregable. La primera versión web y el Side P
 - La cola permite seleccionar `.mp4` y `.mov`, validar extensión, MIME y tamaño, reordenar y quitar elementos.
 - Los videos permanecen en el equipo hasta que el usuario los borre o reemplace.
 - La biblioteca puede manejar errores de cuota de IndexedDB y avisar cuando un archivo desaparece.
+- Antes de importar, se avisa de posibles duplicados por nombre normalizado, tamaño y fecha de modificación; el usuario puede conservar las copias u omitirlas.
 
 ## 3. Agenda local completa y revisable — En progreso
 

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getPreSubmitRetryDelayMs,
+  MAX_PRE_SUBMIT_RETRIES,
   normalizeQueue,
   QUEUE_ITEM_STATUSES,
   queueIsEditable,
@@ -191,4 +193,19 @@ test("preserves the end cursor on an existing queue but starts at zero for a new
   const firstImport = reconcileQueueVideoIds({ status: "idle", index: 0, videoIds: [], items: [] }, ["video-first"]);
   assert.equal(firstImport.index, 0);
   assert.equal(firstImport.currentVideoId, "video-first");
+});
+
+test("allows at most two incremental retries only for explicitly retryable pre-submit failures", () => {
+  const failed = (attemptCount, phase = "before_submit", retryable = true) => ({
+    status: QUEUE_ITEM_STATUSES.FAILED,
+    attemptCount,
+    lastResult: { phase, retryable },
+  });
+
+  assert.equal(MAX_PRE_SUBMIT_RETRIES, 2);
+  assert.equal(getPreSubmitRetryDelayMs(failed(1)), 30_000);
+  assert.equal(getPreSubmitRetryDelayMs(failed(2)), 60_000);
+  assert.equal(getPreSubmitRetryDelayMs(failed(3)), null);
+  assert.equal(getPreSubmitRetryDelayMs(failed(1, "after_submit")), null);
+  assert.equal(getPreSubmitRetryDelayMs({ ...failed(1), status: QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION }), null);
 });

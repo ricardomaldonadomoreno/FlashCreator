@@ -29,6 +29,8 @@ const VALID_QUEUE_STATUSES = new Set([
   "completed",
 ]);
 const LOCKED_QUEUE_STATUSES = new Set(["running", "paused", "needs_verification", "completed"]);
+const RETRY_BASE_DELAY_MS = 30_000;
+export const MAX_PRE_SUBMIT_RETRIES = 2;
 
 const nowIso = () => new Date().toISOString();
 const safeCount = (value) => Number.isInteger(value) && value >= 0 ? value : 0;
@@ -198,10 +200,22 @@ export function queueItemStatusLabel(status) {
     [QUEUE_ITEM_STATUSES.PREPARING]: "Preparando",
     [QUEUE_ITEM_STATUSES.AWAITING_CONFIRMATION]: "Pendiente de confirmar",
     [QUEUE_ITEM_STATUSES.SCHEDULED]: "Estado local: programado (sin confirmar)",
-    [QUEUE_ITEM_STATUSES.FAILED]: "Falló antes de confirmar",
+    [QUEUE_ITEM_STATUSES.FAILED]: "Error · revisa antes de reintentar",
     [QUEUE_ITEM_STATUSES.NEEDS_VERIFICATION]: "Interrumpido · verifica antes de reintentar",
   };
   return labels[status] ?? labels[QUEUE_ITEM_STATUSES.PENDING];
+}
+
+/**
+ * Retry policy for a future sender: only explicitly retryable failures before
+ * the final external action qualify. A null result means never retry automatically.
+ */
+export function getPreSubmitRetryDelayMs(item) {
+  if (item?.status !== QUEUE_ITEM_STATUSES.FAILED) return null;
+  if (item.lastResult?.phase !== "before_submit" || item.lastResult?.retryable !== true) return null;
+  const failedAttempts = safeCount(item.attemptCount);
+  if (failedAttempts < 1 || failedAttempts > MAX_PRE_SUBMIT_RETRIES) return null;
+  return RETRY_BASE_DELAY_MS * (2 ** (failedAttempts - 1));
 }
 
 export async function readQueue() {

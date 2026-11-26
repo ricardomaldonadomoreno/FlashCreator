@@ -1,4 +1,4 @@
-import { addVideos, listVideoMetadata, removeVideo } from "./core/local-media-store.mjs";
+import { addVideos, findPossibleDuplicateFiles, listVideoMetadata, removeVideo } from "./core/local-media-store.mjs";
 import { DEFAULT_SCHEDULE, formatSlotForDisplay, planSchedule } from "./core/scheduler.mjs";
 import { queueIsEditable, queueItemStatusLabel, readQueue, reconcileQueueVideoIds, writeQueue } from "./core/queue-store.mjs";
 
@@ -196,21 +196,49 @@ async function handleImport() {
   if (!queue || !queueIsEditable(queue) || isImporting) return;
   const files = [...(elements.picker.files ?? [])];
   if (!files.length) return;
+  const possibleDuplicates = findPossibleDuplicateFiles(files, videos);
+  let filesToImport = files;
+  let skippedDuplicates = 0;
+  let acceptedDuplicates = 0;
+  if (possibleDuplicates.length) {
+    const importCopies = window.confirm(
+      `Se detectaron ${possibleDuplicates.length} posibles duplicados por nombre, tamaño y fecha de modificación.\n\n` +
+      "Aceptar: importar las copias de todos modos.\nCancelar: omitirlas y guardar el resto de la selección.",
+    );
+    if (importCopies) {
+      acceptedDuplicates = possibleDuplicates.length;
+    } else {
+      const duplicateIndexes = new Set(possibleDuplicates.map((duplicate) => duplicate.index));
+      filesToImport = files.filter((_, index) => !duplicateIndexes.has(index));
+      skippedDuplicates = possibleDuplicates.length;
+    }
+  }
+  if (!filesToImport.length) {
+    elements.importStatus.textContent = `Se omitieron ${skippedDuplicates} posibles duplicados; no había videos nuevos que guardar.`;
+    elements.picker.value = "";
+    return;
+  }
   elements.importStatus.textContent = "Guardando archivos directamente en el almacenamiento local…";
   isImporting = true;
   elements.picker.disabled = true;
   try {
-    const result = await addVideos(files);
+    const result = await addVideos(filesToImport);
     videos = [...videos, ...result.added];
     queue = reconcileQueueVideoIds(queue, [...queue.videoIds, ...result.added.map((video) => video.id)]);
     await persistQueue();
     const rejectedMessage = result.rejected.length
       ? ` No se agregaron: ${result.rejected.map((file) => `${file.name}: ${file.reason}`).join(" ")}`
       : "";
-    elements.importStatus.textContent = result.added.length
-      ? `Se guardaron ${result.added.length} video${result.added.length === 1 ? "" : "s"} localmente.${rejectedMessage}`
-      : `No se agregaron videos.${rejectedMessage}`;
+    const duplicateMessage = skippedDuplicates
+      ? ` Se omitieron ${skippedDuplicates} posibles duplicados.`
+      : acceptedDuplicates
+        ? ` Se aceptaron ${acceptedDuplicates} posibles duplicados; revisa los videos guardados.`
+        : "";
+    const importMessage = result.added.length
+      ? `Se guardaron ${result.added.length} video${result.added.length === 1 ? "" : "s"} localmente.${rejectedMessage}${duplicateMessage}`
+      : `No se agregaron videos.${rejectedMessage}${duplicateMessage}`;
     renderVideos();
+    elements.importStatus.textContent = importMessage;
   } catch (error) {
     elements.importStatus.textContent = error.message || "No se pudieron guardar los archivos localmente.";
   } finally {
