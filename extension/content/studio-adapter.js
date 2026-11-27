@@ -311,8 +311,10 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "FLASH_CREATOR_STUDIO_PING") {
       // This reports only file-control presence; it never reads account or page content.
-      const uploadInputs = getVideoFileInputs();
-      sendResponse({ ok: true, version: 2, uploadInputCount: document.querySelectorAll('input[type="file"]').length, eligibleUploadInputCount: uploadInputs.length });
+      const supportedRoute = isSupportedRoute();
+      const uploadInputs = supportedRoute ? getVideoFileInputs() : [];
+      const uploadInputCount = supportedRoute ? document.querySelectorAll('input[type="file"]').length : 0;
+      sendResponse({ ok: supportedRoute, supportedRoute, version: 2, uploadInputCount, eligibleUploadInputCount: uploadInputs.length });
       return false;
     }
     if (message?.type === "FLASH_CREATOR_STUDIO_TRANSFER_VIDEO") {

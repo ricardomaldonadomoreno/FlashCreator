@@ -320,7 +320,7 @@ function setStudioStatus(message, state = "info") {
 async function openStudio() {
   try {
     await chrome.tabs.create({ url: TIKTOK_STUDIO_UPLOAD_URL });
-    setStudioStatus("TikTok Studio se abrió en otra pestaña. Ve a ella, inicia sesión si hace falta y abre Flash Creator desde el icono de extensiones; luego comprueba la pestaña activa.");
+    setStudioStatus("TikTok Studio se abrió en otra pestaña. Ve a ella, inicia sesión si hace falta y haz clic en el icono de Flash Creator en la barra de Chrome; luego comprueba la conexión.");
   } catch (error) {
     setStudioStatus(error.message || "No se pudo abrir TikTok Studio.", "error");
   }
@@ -329,20 +329,19 @@ async function openStudio() {
 async function connectToActiveStudioTab() {
   elements.studioConnect.disabled = true;
   connectedTabId = null;
-  setStudioStatus("Comprobando la pestaña activa…");
+  setStudioStatus("Comprobando el adaptador de la pestaña activa…");
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab?.id) throw new Error("No se encontró una pestaña activa.");
-    if (!isSupportedStudioUploadUrl(tab.url)) {
-      throw new Error("Abre https://www.tiktok.com/tiktokstudio/upload en la pestaña activa y vuelve a intentarlo.");
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(tab.id, { type: "FLASH_CREATOR_STUDIO_PING" });
+    } catch {
+      throw new Error("No se encontró el adaptador. En la pestaña de TikTok Studio, haz clic en el icono de Flash Creator de la barra de Chrome y vuelve a comprobar.");
     }
-
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content/studio-adapter.js"],
-    });
-    const response = await chrome.tabs.sendMessage(tab.id, { type: "FLASH_CREATOR_STUDIO_PING" });
-    if (!response?.ok) throw new Error(response?.message || "El adaptador no pudo confirmar la conexión.");
+    if (!response?.ok || response.supportedRoute !== true) {
+      throw new Error(response?.message || "Abre la ruta de carga de TikTok Studio y haz clic en el icono de Flash Creator de la barra de Chrome.");
+    }
 
     const controlCount = response.eligibleUploadInputCount;
     const controlsMessage = controlCount === 1
@@ -569,9 +568,16 @@ async function transferVideoToStudio(video) {
   if (item?.status !== QUEUE_ITEM_STATUSES.PENDING && !mayRetry) return;
 
   const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (activeTab?.id !== connectedTabId || !isSupportedStudioUploadUrl(activeTab.url)) {
+  if (activeTab?.id !== connectedTabId) {
     connectedTabId = null;
     setStudioStatus("La pestaña conectada ya no está activa o cambió de ruta. Vuelve a comprobar TikTok Studio.", "error");
+    renderVideos();
+    return;
+  }
+  const routeCheck = await chrome.tabs.sendMessage(connectedTabId, { type: "FLASH_CREATOR_STUDIO_PING" }).catch(() => null);
+  if (!routeCheck?.ok || routeCheck.supportedRoute !== true) {
+    connectedTabId = null;
+    setStudioStatus("No se pudo confirmar la ruta de carga. Abre TikTok Studio, haz clic en el icono de Flash Creator de la barra y vuelve a comprobar.", "error");
     renderVideos();
     return;
   }

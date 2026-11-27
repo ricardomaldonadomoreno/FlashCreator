@@ -4,6 +4,8 @@
 
 El transporte normal de `chrome.runtime.sendMessage`, `tabs.sendMessage`, `Port.postMessage` de la extensión y `scripting.executeScript({ args })` usa mensajes JSON o argumentos serializables como JSON. Chrome fija un máximo de 64 MiB por mensaje. Por eso Flash Creator no envía el video por esas APIs ni lo convierte en Base64.
 
+La conexión usa el clic del icono de acción de Flash Creator: el service worker abre el Side Panel e inyecta el adaptador únicamente si la URL coincide con la ruta de carga admitida. La conexión no depende de `activeTab` desde un botón dentro del Side Panel, porque Chrome no concede ese permiso al abrir el panel; el panel solo envía un ping al adaptador ya preparado [6] [7]. El manifiesto no declara permisos de host persistentes.
+
 La transferencia de prueba usa un iframe estático de la extensión, dentro de un Shadow DOM cerrado creado por el adaptador. Chrome solo permite patrones de origen en `web_accessible_resources.matches` y exige `/*`; por tanto, el recurso queda accesible desde páginas del origen `https://www.tiktok.com`, no solo desde una ruta [5]. El adaptador, en cambio, se ejecuta únicamente en la ruta de carga exacta. Antes de leer IndexedDB, el iframe exige un token aleatorio de un solo uso, con metadatos coincidentes y vencimiento de 60 segundos, guardado por el Side Panel en `chrome.storage.session`. El token viaja por mensajes de extensión y el canal privado, no por el DOM de la página.
 
 El content script crea un `MessageChannel` y envía uno de sus puertos directamente al iframe con `window.postMessage` y un origen de destino exacto. El iframe valida que el emisor sea su ventana padre y que el origen sea `https://www.tiktok.com`; también exige un nonce aleatorio. La página no recibe el puerto por un mensaje global ni el token de autorización, y no puede acceder al iframe a través del DOM ordinario.
@@ -25,3 +27,5 @@ El patrón del iframe privado con token y canal se inspira en una discusión pú
 [3]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm "Structured clone algorithm"
 [4]: https://github.com/GoogleChrome/chrome-extensions-samples/issues/766#issuecomment-1295767046 "Chrome extensions sample discussion on private MessagePort bridges"
 [5]: https://developer.chrome.com/docs/extensions/reference/manifest/web-accessible-resources "Chrome web-accessible resources and origin-only matches"
+[6]: https://developer.chrome.com/docs/extensions/develop/concepts/activeTab "Chrome activeTab permission"
+[7]: https://issues.chromium.org/issues/336592430 "Chromium issue on activeTab and the Side Panel"
