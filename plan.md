@@ -1,111 +1,123 @@
 # Plan de desarrollo — Flash Creator
 
-- **Versión:** 1.2
-- **Fecha:** 26 de noviembre de 2026
-- **Producto:** Flash Creator. **Auto Poster** es solo la extensión de referencia, no el nombre del producto nuevo.
-**Repositorio:** `ricardomaldonadomoreno/FlashCreator` (público, autorizado por el propietario).
+- **Versión:** 1.3
+- **Fecha:** 27 de noviembre de 2026
+- **Producto:** Flash Creator. **Auto Poster** es solo la extensión de referencia.
+- **Repositorio:** `ricardomaldonadomoreno/FlashCreator`.
 
 ## Propósito y resultado esperado
 
-Construir Flash Creator como una plataforma web con una extensión/agente local de Chrome que acompañe TikTok Studio en el Side Panel. La extensión conserva en el equipo del usuario los videos, la cola y el historial; la web administra la cuenta, el acceso comercial y las herramientas futuras. Se preservará el comportamiento útil de la extensión de referencia, pero el código del CRX no se copiará como producto terminado ni se ejecutará sin inspección.
+Evolucionar Flash Creator a un programa local instalable para Windows. El usuario organiza una cola de videos, revisa los horarios y da inicio a una tanda. Un agente local, limitado a la página de carga de TikTok Studio, abre un navegador visible, carga cada archivo de la cola, introduce su horario y confirma la programación. Repite el flujo en orden hasta terminar o detenerse ante un error que no pueda confirmar con seguridad.
+
+Los videos, la cola, el historial y el perfil del navegador permanecen en el equipo. El programa no usa la Content Posting API ni envía videos a un backend de Flash Creator. La extensión MV3 actual se conserva durante la migración, pero el nuevo flujo de escritorio no depende de su Side Panel, service worker ni mensajería entre extensión y pestaña.
 
 ## Arquitectura y alcance
 
-- **Web en Vercel:** Next.js App Router para el sitio, panel de cuenta y futuras páginas. Los Route Handlers alojarán endpoints server-side como webhooks. Ningún secreto privado ni clave de proveedor se incluirá en el JavaScript público.
-- **Agente de Chrome Manifest V3:** extensión con Side Panel y service worker. La beta supervisada interactúa con TikTok Studio solo después de una acción explícita, en la pestaña activa y en la ruta de carga admitida. Usa `activeTab` y `scripting`, sin cookies ni hosts persistentes. Chrome exige que `web_accessible_resources.matches` use `/*` y solo considera el origen; por ello el iframe se expone para el origen de TikTok, mientras el adaptador comprueba la ruta exacta. Antes de leer el video local, el iframe consume una autorización aleatoria de un solo uso guardada por el Side Panel en `chrome.storage.session`. El canal `MessageChannel` lleva fragmentos Blob con ACK, no Base64. Cada video requiere confirmación y Flash Creator se detiene antes del clic final de programar. Esto describe el comportamiento técnico, no una aprobación de TikTok. La interfaz local seguirá separada; no se incrustará TikTok en un iframe de la web.
-- **Datos locales:** IndexedDB guarda blobs y metadatos en object stores separados; `chrome.storage.local` guarda preferencias pequeñas y estado recuperable. Los videos, captions completos y cookies no se envían al backend en el flujo normal.
-- **Backend comercial:** rutas server-side y una base pequeña para identidad verificada, licencia, instalaciones autorizadas, suscripciones y eventos de pago. Se propone Supabase Auth/Postgres para el primer lanzamiento por su integración sencilla con Vercel; no se habilitará acceso real hasta configurar credenciales y políticas. Hotmart será el primer adaptador de pago y se mantendrá una interfaz para agregar otras pasarelas.
-- **MVP inicial de este repositorio:** interfaz web de producto y una primera versión del Side Panel que importa videos localmente, mantiene metadatos separados de blobs y genera/visualiza una agenda. La beta del agente conecta con la ruta admitida y ya incluye una transferencia experimental de un video al control de carga, con progreso y estados recuperables. El ensayo real con clips no críticos y la memoria con videos grandes siguen pendientes. La persona debe revisar la página y efectuar la confirmación final de programación.
-- **Entrega de la extensión:** desarrollo primero como extensión desempaquetada en Chrome; antes de venderla se preparará el paquete y el flujo de distribución de Chrome Web Store.
+- **Aplicación de escritorio:** Electron empaqueta la interfaz React/Next existente y el proceso local. Se distribuye como instalador `.exe` de Windows. No requiere un servidor web de Flash Creator para administrar la biblioteca o la cola. El código de interfaz se reutilizará cuando sea compatible con la exportación/empaquetado local.
+- **Navegador local:** Playwright lanza una ventana visible de Chrome con un perfil separado de Flash Creator. La primera vez, el usuario inicia sesión manualmente en ese perfil. No se reutiliza ni se lee el perfil personal existente de Chrome. El usuario debe mantener el programa y el navegador abiertos hasta que termine la tanda.
+- **Agente acotado:** una máquina de estados determinista, no un modelo de lenguaje decidiendo clics a ciegas, controla solo el flujo de carga/programación configurado. Comprueba el estado esperado antes de cada paso, procesa un video a la vez y guarda el estado local antes y después de acciones externas. La IA podrá ayudar con textos, preparación y diagnóstico, pero no ejecutará código arbitrario ni ampliará los permisos de acción.
+- **Acción de lote:** antes de iniciar, Flash Creator muestra los videos y horarios y pide una confirmación para la tanda. Después opera secuencialmente sobre los elementos aprobados. Si el usuario pausa, la página cambia inesperadamente, aparece una verificación humana o la confirmación de TikTok no es inequívoca, se detiene; no continúa ni repite una publicación incierta.
+- **Persistencia local:** videos copiados a una biblioteca local seleccionable; metadatos, agenda, cola e historial en almacenamiento local transaccional. No se transportan blobs por mensajes de extensión, no se convierten a Base64 y no se envían al servidor. Los registros técnicos guardan estados y errores, no contraseñas, cookies ni contenido de video.
+- **Agenda:** se conservan el intervalo, ventana horaria, días activos, límite diario, variación y horizonte máximo ya implementados. Los horarios se calculan y guardan antes de iniciar; la zona horaria se muestra explícitamente y no se recalcula al reanudar.
+- **Proveedores de IA:** se prepara un adaptador independiente para OpenRouter y otros endpoints compatibles. La integración BYOK queda separada del control del navegador. Las claves se guardarán localmente usando el almacén seguro del sistema cuando se implemente. Por defecto solo se permitirán modelos gratuitos seleccionados y no habrá fallback silencioso a un modelo de pago. Ningún video se enviará al proveedor.
+- **Permisos y límites:** solo se automatizan pasos del flujo de carga y programación de la cola. No se inspeccionan mensajes, analíticas, cookies, contactos ni otras páginas de la cuenta. No se incorporan mecanismos para ocultar la automatización o evadir verificaciones. TikTok puede cambiar la interfaz o sus condiciones; no se promete compatibilidad universal ni aprobación de TikTok.
+- **Resultado de publicación:** Flash Creator marca un video como programado únicamente tras observar una confirmación inequívoca en Studio. Una vez aceptado el horario por TikTok, la publicación futura la realiza TikTok; el PC no necesita permanecer encendido para esos horarios ya aceptados. El PC sí permanece encendido hasta terminar de procesar la cola.
 
 ## Estructura prevista
 
 ```text
-app/                     Rutas web, layout y APIs server-side de Next.js
-components/              Componentes del panel y elementos visuales
-lib/                     Funciones server-side, autenticación y adaptadores
-extension/
-  manifest.json          Manifiesto MV3 y permisos mínimos
-  background.js          Coordinación de cola y service worker
-  panel.html/js/css      Side Panel que acompaña TikTok Studio
-  content/               Adaptador de interfaz de TikTok Studio, inyectado a petición
-  lib/                   IndexedDB local, cola, agenda y resolvedores seguros
-  locales/               Textos del agente; i18n cuando el flujo se estabilice
-supabase/                Esquema/migraciones del backend, sin datos locales de video
-public/                  Iconos y recursos web públicos
-scripts/                 Comandos de desarrollo y empaquetado de la extensión
+app/                         Interfaz React/Next reutilizada y rutas estáticas
+components/                  Panel, biblioteca, agenda, ejecución y configuración
+ desktop/
+   main/                      Proceso Electron: ventana, IPC acotado y ciclo de vida
+   preload/                   API IPC explícita y mínima para la interfaz
+   agent/                     Orquestador secuencial y estados de la tanda
+   browser/                   Perfil dedicado y adaptador de TikTok Studio
+   storage/                   Biblioteca local, metadatos, cola e historial
+   providers/                 Adaptadores de IA y resguardo local de claves
+   packaging/                 Configuración del instalador Windows
+extension/                    Versión MV3 anterior, conservada durante migración
+extension/core/               Lógica reusable de agenda, cola y biblioteca cuando aplique
+docs/                         Decisiones de arquitectura, operación y límites
+scripts/                      Desarrollo, validación y empaquetado
+.github/workflows/            Construcción del instalador Windows en runner Windows
 ```
 
 ## Mejoras comprometidas
 
-### Cola, reintentos, historial y memoria
+### Cola y biblioteca
 
-- Guardar identificador de cola, índice, estado, intento, horario asignado, zona horaria, configuración y resultado. Confirmar el guardado antes y después de las acciones externas importantes.
-- Al reiniciar navegador o service worker, reanudar la cola desde su estado persistido. Un video que estaba en envío/confirmación se marca “por verificar” en vez de repetir una acción que quizá ya tuvo éxito.
-- Reintentar una o dos veces únicamente fallos recuperables previos al envío final, con pausa incremental. No repetir automáticamente si TikTok recibió la orden de programar y no confirmó el resultado.
-- Guardar historial local para advertir de posibles duplicados usando nombre, tamaño y fecha de modificación. Permitir omitir, revisar o volver a programar con decisión del usuario.
-- Mantener los blobs de video separados de sus metadatos; listar, ordenar y mostrar elementos sin cargar los blobs. Permitir quitar y reordenar videos.
-- Eliminar Base64 del intercambio de archivos. La primera iteración usa fragmentos Blob de 4 MiB con ACK y libera referencias tras completar; aún se deben medir Chrome y TikTok Studio con videos de varios tamaños antes de prometer compatibilidad con cientos de MB.
+- Importar `.mp4` y `.mov` con validación de extensión, MIME y tamaño; permitir reordenar y quitar elementos.
+- Separar los videos de sus metadatos y listar sin leer archivos completos. Conservar archivos en una carpeta local administrada por Flash Creator.
+- Detectar posibles duplicados por nombre normalizado, tamaño y fecha, y permitir omitirlos o conservarlos conscientemente.
+- Guardar localmente el identificador de cola, orden, índice, estado por video, intentos, horario, zona horaria, configuración, historial y último resultado.
+- Recuperar el estado tras un cierre o reinicio. Si se interrumpe un paso cuyo resultado externo puede haber tenido éxito, marcar “por verificar” y no repetirlo automáticamente.
+- Permitir hasta dos reintentos únicamente cuando el fallo se confirme antes de iniciar el envío externo, con pausas incrementales. Después del clic de programación, nunca reintentar sin verificación.
 
-### Agenda y seguridad del flujo
+### Agenda y ejecución
 
-- Configurar intervalo, ventana horaria permitida, días activos, tope por día y variación aleatoria pequeña.
-- Calcular y persistir de antemano los slots de toda la cola, con zona horaria explícita; reanudar sin cambiar horarios automáticamente.
-- Validar antes de comenzar que todos los slots respetan ventana, tope y horizonte que permita TikTok Studio para la cuenta. No asumir que un límite visible en una cuenta es universal.
-- El acceso a TikTok Studio comienza solo tras una acción explícita en el Side Panel y se limita a la pestaña activa cuya URL sea exactamente la ruta HTTPS de carga compatible. La primera etapa solo confirma conexión y presencia de un control de carga; no lee perfil, cookies, mensajes ni analíticas.
-- Para la beta supervisada, usar `activeTab` y `scripting` para inyectar el adaptador bajo demanda. No pedir `cookies`, `tabs` ni permisos persistentes de host; no ejecutar scripts en segundo plano ni en otras rutas. El usuario verifica manualmente que su sesión esté abierta.
-- La etapa de preparación del formulario debe mostrar el video y el horario, y detenerse para revisión humana. No pulsar automáticamente la acción final de programar en esta beta; una automatización final requerirá una fase separada y consentimiento explícito.
-- El resolvedor de enlaces acepta solo HTTPS/HTTP en hostnames de TikTok incluidos en allowlist, valida cada salto de redirección y rechaza protocolos, dominios y hosts falsificados.
+- Calcular por adelantado los slots de todos los videos según intervalo, ventana horaria, días activos, tope diario y variación.
+- Validar antes de iniciar el horizonte máximo configurado y conservar los slots al reanudar.
+- Mostrar un resumen completo de videos y horarios y exigir una confirmación de lote antes de que el agente empiece.
+- Procesar secuencialmente: abrir carga, seleccionar archivo local, esperar la carga, aplicar el horario, confirmar el envío/programación y comprobar el resultado antes de avanzar.
+- Mantener controles visibles de pausar y detener. Si falta un control, hay más de un candidato, hay una verificación humana, TikTok cambia el formulario o el estado no coincide, detener la cola con una explicación y registro.
+- No saltar un video fallido ni continuar con el siguiente como si el lote hubiese tenido éxito.
 
-### Producto, acceso y evolución
+### IA y seguridad local
 
-- Interfaz inicial en español; i18n con `chrome.i18n` y cobertura del motor después de estabilizar selectores y mensajes.
-- MVP con `.mp4` y `.mov`, comprobación anticipada de extensión/MIME/tamaño, modo de prueba y vista previa final de cuenta, clips, captions, productos, etiquetas, fechas y advertencias.
-- Hotmart enviará eventos a un endpoint server-side que valide `X-HOTMART-HOTTOK`, procese idempotentemente el ID de evento y actualice la política de acceso. Reembolso, contracargo, cancelación y fechas de renovación se tratarán de manera distinta según la política; no se revocará acceso indiscriminadamente ante cualquier cancelación.
-- Vincular compra con cuenta mediante correo verificado o código temporal; nunca activar por un email escrito sin verificación. La extensión usará tokens de acceso de vida limitada y no contendrá secretos maestros.
-- Persistir solo datos necesarios para cuentas, acceso, instalaciones y recibos de webhooks. No persistir videos ni enviar archivos al backend.
-- Añadir después conectores de IA que permitan elegir proveedor/API, con claves guardadas del lado servidor cuando sea posible. Las claves personales utilizadas directamente por el usuario se gestionarán con consentimiento, almacenamiento seguro y límites claros.
-- La Content Posting API oficial de TikTok se evaluará por separado. Requiere aprobación del producto y scope aplicable, autorización del creador y cumplimiento de sus lineamientos de UX/auditoría. No se asumirá que sustituye TikTok Studio ni que admite programación futura hasta verificarlo en documentación oficial vigente y aprobación de TikTok.
+- Crear una interfaz `AIProvider` para OpenRouter y proveedores compatibles, con endpoint, modelo y clave configurables por usuario.
+- Mantener la clave en almacenamiento cifrado del sistema operativo, no en el repositorio ni en el frontend público. La integración no debe guardar ni subir videos.
+- Filtrar modelos gratuitos si el usuario activa “solo gratis”; no seleccionar modelos de pago como fallback sin aprobación explícita.
+- Validar la salida de IA como sugerencias o datos estructurados. El ejecutor solo acepta acciones de una lista fija y nunca código JavaScript generado por el modelo.
+- Restringir IPC de Electron a funciones necesarias de cola, biblioteca y navegador; no habilitar `nodeIntegration` en la interfaz.
+
+### Producto y distribución
+
+- Interfaz en español y colores definidos por el usuario: índigo `#0b1325`, celadón `#a9cdbe` y dorado `#f2b53a`.
+- Construir y probar la app desde el repositorio; empaquetar el `.exe` mediante un runner Windows. La primera distribución puede ser sin firma y Windows podría mostrar una advertencia; para venta pública se evaluará firma de código.
+- Conservar la extensión anterior mientras la edición de escritorio completa pruebas locales y una prueba supervisada con videos no críticos.
+- Identidad comercial, licencias y Hotmart quedan en una fase separada. No guardar videos ni claves maestras en servicios de Flash Creator.
 
 ## Decisiones de diseño
 
-Tres direcciones consideradas: **consola de creador** (0.08), **editorial suave** (0.05) y **estudio neo-dorado** (0.07). Se elige consola de creador porque el producto combina archivos, cola y señales operativas. La paleta fue definida por el usuario: índigo `#0b1325` como base de confianza y foco, celadón `#a9cdbe` para progreso y controles activos, y dorado `#f2b53a` para decisiones, alertas y acciones importantes.
+Se conserva la dirección aprobada: **consola de creador**. La paleta del usuario mantiene índigo `#0b1325` como base, celadón `#a9cdbe` para avance y controles activos, y dorado `#f2b53a` para decisiones y alertas.
 
-- **Movimiento visual:** consola editorial contemporánea inspirada en herramientas de postproducción, con un lenguaje sobrio y expresivo.
-- **Principios:** jerarquía de estado inmediata; medios en primer plano; seguridad antes de automatizar; controles claros y reversibles.
-- **Layout:** navegación vertical compacta, espacio de trabajo asimétrico para agenda y cola, y una línea de estado persistente. El Side Panel usa una columna estrecha y prioriza pasos cortos.
-- **Motivos distintivos:** marca “FC” como dos marcos de video enlazados; líneas de tiempo finas en celadón; acentos dorados puntuales sobre fondos índigo.
-- **Interacción:** cualquier acción que cambie estado muestra alcance, progreso y opción de detener. La programación se presenta primero como vista previa; los estados inciertos se nombran explícitamente.
-- **Animación:** transiciones breves de 160–220 ms para paneles, progreso no bloqueante y pequeños desplazamientos de timeline; sin loops decorativos ni animaciones que sugieran que un video se publicó cuando solo se cargó.
-- **Tipografía:** sans-serif de sistema para interfaz y cifras, con una serif editorial opcional en titulares cortos. Los metadatos y horarios usan números tabulares.
-- **Esencia de marca:** “El estudio local que convierte una cola de videos en una agenda clara para creadores”. Personalidad: enfocado, confiable, ágil.
-- **Voz:** concreta, calmada y accionable. Ejemplos: “Tu agenda, antes de subir.” y “Revisa cada horario; Flash Creator conserva tu cola en este equipo.”
-- **Wordmark:** monograma geométrico “FC” construido con dos marcos verticales de video y una línea de timeline; no depender de texto de fuente predeterminada para el símbolo.
-- **Color insignia:** celadón `#a9cdbe` como señal propia de preparación y continuidad sobre la base índigo.
+- **Movimiento visual:** consola editorial contemporánea inspirada en herramientas de postproducción.
+- **Principios:** estado visible, medios locales, control acotado y acciones recuperables.
+- **Layout:** navegación compacta, biblioteca y agenda en áreas de trabajo asimétricas y una línea de estado persistente para el lote.
+- **Motivos:** monograma “FC” como marcos de video enlazados y una línea de tiempo fina en celadón con acentos dorados puntuales.
+- **Interacción:** el inicio del lote presenta alcance y horarios; el progreso es por video; detener y pausar siempre están visibles; el estado incierto nunca se presenta como éxito.
+- **Animación:** transiciones breves, progreso no bloqueante y sin efectos que aparenten una publicación antes de la confirmación.
+- **Tipografía:** sans-serif de sistema para la interfaz, serif editorial opcional en titulares cortos y cifras tabulares en horarios.
+- **Esencia:** “El estudio local que convierte una cola de videos en una agenda clara para creadores”. Personalidad enfocada, confiable y ágil.
+- **Voz:** concreta, calmada y accionable. Ejemplos: “Tu agenda, antes de subir.” y “La cola está en pausa; revisa el resultado de este video en Studio.”
+- **Wordmark:** monograma geométrico “FC” construido con dos marcos de video y una línea de timeline.
+- **Color insignia:** celadón `#a9cdbe` como señal de preparación y continuidad sobre índigo.
 
 ## Fases
 
-1. **Base del producto:** estructura Next.js y agente lateral, paleta, importación local, metadatos/blobs separados y agenda preliminar.
-2. **Núcleo robusto:** persistencia de cola e índice, historial, reintentos seguros, transferencia binaria, reordenamiento y cálculo completo de horarios.
-3. **Beta supervisada de TikTok Studio:** conexión explícita a la pestaña activa de carga; luego transferencia local y preparación del formulario con controles y progreso; detenerse antes de la acción final para revisión y clic manual del usuario. La automatización de TikTok Studio no se presenta como aprobada por TikTok. La Content Posting API queda como alternativa separada y no es requisito de esta beta.
-4. **Cuenta y pagos:** login verificado, política de acceso, esquema de base, token temporal de extensión, webhook Hotmart idempotente y adaptador de pagos.
-5. **Beta y distribución:** validación con cuentas de prueba, reinicios, red irregular, cuotas locales, zonas horarias y límites; preparar privacidad, soporte y distribución Web Store.
-6. **Evolución:** localización, formatos nuevos como `.webm` solo tras comprobar compatibilidad, integraciones de IA configurables y otros proveedores de pago.
+1. **Migración de escritorio:** incorporar Electron y una interfaz local, definir IPC restringido, abrir el perfil dedicado visible y configurar un proyecto de prueba local.
+2. **Biblioteca y cola local:** migrar/reutilizar importación, agenda, persistencia, duplicados, recuperación y estados de la extensión.
+3. **Agente de navegador:** implementar el flujo secuencial mediante un adaptador aislado para la página de carga y programación. Pausar ante verificaciones o cambios inesperados; probar primero con una página simulada y luego con una cuenta y clips no críticos bajo supervisión del usuario.
+4. **Conectores de IA:** implementar BYOK/OpenRouter u otros proveedores compatibles, claves protegidas localmente y herramientas permitidas de texto/planificación, sin envío de video.
+5. **Empaquetado Windows:** preparar el instalador `.exe` y flujo de build en Windows; conservar la extensión durante la transición.
+6. **Acceso comercial y evolución:** evaluar licencias, distribución, localización adicional y otras integraciones sin mezclar secretos ni videos con el backend.
 
 ## Riesgos y límites
 
-- Cambios en TikTok Studio pueden invalidar selectores; el adaptador debe ser reemplazable y fallar con explicación, no hacer clic a ciegas.
-- Una confirmación perdida después de enviar es un riesgo de duplicación; el resultado debe quedar “por verificar”.
-- La PC y Chrome deben seguir activos mientras el agente carga y programa. Cuando TikTok confirme que cada publicación futura quedó programada en sus servidores, apagar la PC no debe cancelar esas publicaciones ya aceptadas.
-- La documentación global de TikTok incluye restricciones sobre scripts automatizados que interactúan con sus servicios; la beta local se construirá bajo decisión explícita del propietario, con acciones visibles, permisos mínimos y confirmación manual final. La implementación no equivale a autorización oficial ni garantiza que TikTok apruebe el uso comercial. Ver `docs/tiktok-studio-compatibility-review.md`.
-- La disponibilidad de funciones de TikTok Studio puede variar por cuenta, país o versión. No prometer compatibilidad universal sin pruebas autorizadas.
-- El control de licencia protege el servicio, pero no vuelve imposible inspeccionar/modificar una extensión ejecutada localmente; la autoridad de acceso y secretos permanecen server-side.
+- Cambios en la interfaz de TikTok Studio pueden invalidar selectores; el agente debe pausar en vez de hacer clic a ciegas.
+- Una pérdida de confirmación después de enviar un video puede producir duplicados si se reintenta; el resultado se conserva como “por verificar”.
+- La primera sesión requiere inicio manual en el perfil dedicado. Una verificación humana o captcha pausa el lote y requiere intervención del usuario.
+- La disponibilidad de carga y programación depende de la cuenta, región y estado de TikTok Studio. La app no afirma una aprobación o asociación oficial con TikTok.
+- Mientras se carga y programa la cola, el equipo debe seguir encendido y el programa activo. Los horarios que TikTok ya confirmó quedan del lado de TikTok.
+- El primer instalador puede requerir advertencia de seguridad de Windows hasta que se configure firma de código.
 
-## Referencias técnicas consultadas
+## Fuentes y referencias técnicas
 
-- [Chrome Side Panel API](https://developer.chrome.com/docs/extensions/reference/api/sidePanel)
-- [Next.js Route Handlers](https://nextjs.org/docs/app/getting-started/route-handlers)
-- [Next.js en Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs)
+- [TikTok Terms of Service global](https://www.tiktok.com/legal/page/global/terms-of-service/en)
 - [TikTok Content Posting API](https://developers.tiktok.com/doc/content-posting-api-get-started)
-- [Hotmart Purchase Webhook](https://developers.hotmart.com/docs/en/2.0.0/webhook/purchase-webhook/)
-- [Restricciones y diseño del puente de transferencia local](docs/chrome-file-transfer-design.md)
+- [Electron Security](https://www.electronjs.org/docs/latest/tutorial/security)
+- [Playwright persistent browser context](https://playwright.dev/docs/api/class-browsertype)
+- [Chrome remote debugging changes](https://developer.chrome.com/blog/remote-debugging-port)
+- [Diseño actual de transferencia local](docs/chrome-file-transfer-design.md)
+- [Compatibilidad de TikTok Studio revisada](docs/tiktok-studio-compatibility-review.md)

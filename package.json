@@ -2,6 +2,8 @@
   "name": "flash-creator",
   "version": "0.1.0",
   "private": true,
+  "description": "Aplicación local para organizar y programar videos en TikTok Studio.",
+  "author": "Flash Creator",
   "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22.13.0"
@@ -10,20 +12,48 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "desktop:dev": "node scripts/desktop-dev.mjs",
+    "desktop:run": "electron .",
+    "desktop:dist:win": "pnpm build && electron-builder --win nsis",
     "typecheck": "tsc --noEmit",
-    "test": "node --test extension/core/*.test.mjs",
+    "test": "node --test extension/core/*.test.mjs desktop/main/*.test.cjs",
     "extension:check": "node scripts/check-extension.mjs"
   },
   "dependencies": {
-    "lucide-react": "1.80.0",
-    "next": "16.4.6",
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "playwright-core": "1.65.1"
   },
   "devDependencies": {
+    "lucide-react": "1.80.0",
+    "next": "16.4.6",
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0",
     "@types/node": "22.19.5",
     "@types/react": "19.2.8",
     "@types/react-dom": "19.2.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "typescript": "5.9.3"
+  },
+  "main": "desktop/main/index.cjs",
+  "build": {
+    "appId": "com.flashcreator.desktop",
+    "productName": "Flash Creator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "desktop/**/*",
+      "!desktop/**/*.test.cjs",
+      "extension/core/scheduler.mjs",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

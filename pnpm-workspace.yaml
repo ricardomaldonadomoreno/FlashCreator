@@ -1,4 +1,6 @@
 packages: []
-allowBuilds: {}
+allowBuilds:
+  electron: true
+  electron-winstaller: false
 minimumReleaseAgeExclude:
   - lucide-react@1.80.0
